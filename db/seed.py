@@ -15,13 +15,14 @@ which the P6 plan checker must find exactly.
 """
 
 import json
-import os
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import psycopg
+
+from sqlibrarian.config import get_settings
 
 SEED = 42
 N_STUDENTS = 500
@@ -373,21 +374,10 @@ def make_plan(s, current, courses, rules, rng) -> tuple[list[str], str | None, s
 # --- Database ------------------------------------------------------------------------
 
 
-def database_url() -> str:
-    """RECORDS_DB_URL from the environment, else from the repo's .env file."""
-    if url := os.environ.get("RECORDS_DB_URL"):
-        return url
-    env = Path(__file__).resolve().parents[1] / ".env"
-    for line in env.read_text(encoding="utf-8").splitlines():
-        if line.startswith("RECORDS_DB_URL="):
-            return line.split("=", 1)[1].strip()
-    raise SystemExit("RECORDS_DB_URL is not set (add it to .env)")
-
-
 def main() -> None:
     rng = random.Random(SEED)
     expected = []
-    with psycopg.connect(database_url()) as conn, conn.cursor() as cur:
+    with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
         courses, scale, rules = load_catalog(cur)
         cur.execute("TRUNCATE plan_courses, plans, enrollments, students, tas RESTART IDENTITY")
 
