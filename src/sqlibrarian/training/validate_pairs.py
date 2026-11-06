@@ -23,7 +23,7 @@ import psycopg
 from dotenv import load_dotenv
 
 from sqlibrarian.training.sql_utils import (
-    filters_on_student_literal,
+    filters_by_student,
     is_single_select,
     normalize_sql,
 )
@@ -64,8 +64,8 @@ def main() -> None:
                 if not is_single_select(sql):
                     reasons["not a single SELECT"] += 1
                     continue
-                if filters_on_student_literal(sql):
-                    reasons["hard-coded student_id"] += 1
+                if filters_by_student(sql):
+                    reasons["filters by student"] += 1
                     continue
                 n_rows = run_readonly(conn, sql)
                 if n_rows is None:

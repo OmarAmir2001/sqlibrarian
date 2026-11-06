@@ -1,7 +1,7 @@
 import pytest
 
 from sqlibrarian.training.sql_utils import (
-    filters_on_student_literal,
+    filters_by_student,
     is_single_select,
     normalize_sql,
 )
@@ -42,8 +42,30 @@ def test_unsafe_or_multiple_statements_rejected(sql):
 
 
 def test_hard_coded_student_detected():
-    assert filters_on_student_literal("SELECT * FROM enrollments WHERE student_id = 42")
+    assert filters_by_student("SELECT * FROM enrollments WHERE student_id = 42")
 
 
 def test_query_for_current_student_allowed():
-    assert not filters_on_student_literal("SELECT grade FROM enrollments WHERE term_id = 3")
+    assert not filters_by_student("SELECT grade FROM enrollments WHERE term_id = 3")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT * FROM enrollments WHERE student_id = :student_id",
+        "SELECT * FROM enrollments WHERE student_id = current_user_id()",
+        "SELECT * FROM enrollments WHERE student_id = (SELECT MIN(student_id) FROM students)",
+        "SELECT * FROM enrollments WHERE student_id IN (1, 2)",
+        "SELECT * FROM enrollments e WHERE e.student_id <> 7",
+    ],
+)
+def test_any_student_filter_detected(sql):
+    assert filters_by_student(sql)
+
+
+def test_join_on_student_id_allowed():
+    sql = (
+        "SELECT s.name_en, e.total FROM students s "
+        "JOIN enrollments e ON e.student_id = s.student_id"
+    )
+    assert not filters_by_student(sql)

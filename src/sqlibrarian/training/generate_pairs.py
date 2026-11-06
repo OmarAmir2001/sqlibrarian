@@ -21,16 +21,18 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 QUESTION_TYPES = [
-    "the grade or mark in one course",
-    "cumulative GPA, or GPA in one term",
-    "courses failed, or courses repeated",
-    "credit hours completed so far",
-    "courses still left in the study plan",
-    "courses the student can take next term (prerequisites passed, not yet passed)",
-    "status of the student's plan for next term",
-    "grades this term that are not recorded yet",
-    "comparing terms (best term, worst term, improvement)",
-    "counting things (how many courses passed in level 2, how many hard courses)",
+    "the grade, total mark or one mark (midterm, coursework, final) in one course",
+    "cumulative GPA, or GPA in one named term or the last term",
+    "courses failed, courses repeated, or courses failed and not passed yet",
+    "credit hours passed so far, this term, or electives passed",
+    "required or elective courses still left in the student's study plan",
+    "courses the student can take next term (prerequisites passed or in progress)",
+    "prerequisites the student is still missing for a named course",
+    "the student's plan for next term: its status, its courses, its credit hours",
+    "this term: registered courses, hours, and marks that are not recorded yet",
+    "comparing terms (best term, worst term, improvement between two terms)",
+    "counting things (courses passed in level 2, electives passed, attempts at one course)",
+    "the student's advisor, program, level, or most credit hours allowed next term",
 ]
 DIFFICULTIES = ["easy", "medium", "hard"]
 
@@ -41,9 +43,14 @@ Database (PostgreSQL):
 
 Rules:
 - Every question is asked BY the current student about THEIR OWN record ("my GPA", "did I pass...").
-- Never filter by a specific student_id. The database already limits rows to the current student.
+- Never filter by student at all: no student_id = ..., no :student_id or ? placeholders, no
+  current_user. The database already limits every table to the current student's rows.
 - One PostgreSQL SELECT per question. No INSERT, UPDATE, DELETE.
-- Use only the tables and columns above. Use the comments to understand them.
+- Use only the tables and columns above, each on its own table (credit_hours is in courses).
+- Find a course by its name (courses.title_en or title_ar), never by guessing its code.
+- Cumulative GPA is students.cumulative_gpa. A term GPA is
+  SUM(grade_points * credit_hours) / SUM(credit_hours) over passed and failed courses.
+- "This term" is the term where terms.is_current is true; "next term" is the one after it.
 - Write questions the way real students write: short, informal, sometimes with typos.
 
 Examples of good pairs:
@@ -81,7 +88,19 @@ def main() -> None:
     p.add_argument("--pairs-per-call", type=int, default=20)
     p.add_argument("--wait", type=float, default=45.0)  # seconds between calls (8K tokens/min)
     p.add_argument("--model", default="openai/gpt-oss-120b")
+    p.add_argument("--dry-run", action="store_true", help="print the first prompt, call nothing")
     args = p.parse_args()
+
+    if args.dry_run:
+        schema = args.schema.read_text(encoding="utf-8")
+        qtype, difficulty, language = QUESTION_TYPES[0], DIFFICULTIES[0], LANGUAGES[0]
+        prompt = PROMPT.format(
+            schema=schema, examples=load_examples(args.examples), n=args.pairs_per_call,
+            qtype=qtype, difficulty=difficulty, language=language,
+        )  # fmt: skip
+        print(prompt)
+        print(f"\n--- {len(prompt)} characters, about {len(prompt) // 4} tokens in (rough)")
+        return
 
     client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ["GROQ_API_KEY"])
     schema = args.schema.read_text(encoding="utf-8")
