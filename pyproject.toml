@@ -13,18 +13,15 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "sqlalchemy>=2.1.8",
     "sqlglot>=30.30.0",
+    "structlog>=26.1.0",
     "uvicorn[standard]>=0.54.0",
 ]
-
-[project.scripts]
-sqlibrarian = "sqlibrarian:main"
 
 [project.optional-dependencies]
 training = [
     "datasets>=5.1.0",
     "jinja2>=3.1.6",
     "openai>=3.46.0",
-    "python-dotenv>=1.2.4",
     "sentence-transformers>=6.2.0",
     "transformers>=5.22.1",
 ]
@@ -36,6 +33,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "faker>=40.44.0",
+    "openai>=3.46.0",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "ruff>=0.17.4",

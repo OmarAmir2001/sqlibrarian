@@ -34,8 +34,14 @@ from pathlib import Path
 import psycopg
 
 from sqlibrarian.config import get_settings
+from sqlibrarian.enums import Lang, ScoreStatus
 from sqlibrarian.evaluation.db import act_as_student, sample_students
+from sqlibrarian.log import configure_logging, get_logger
 from sqlibrarian.training.sql_utils import is_single_select
+
+log = get_logger(__name__)
+
+TABLE_LANGS = (Lang.EN, Lang.AR, Lang.MIXED)  # columns of the score table
 
 
 def normalize(rows: list[tuple]) -> list[tuple]:
@@ -89,7 +95,9 @@ def students_for(
         witness = next((s for s in everyone if says_something(answer(s))), None)
         witness = witness or next((s for s in everyone if answer(s)), None)
         if witness is None:
-            print(f"warning: {q['id']} has an empty answer for every student; it tests nothing")
+            log.warning(
+                "score.question_tests_nothing", id=q["id"], reason="empty for every student"
+            )
         else:
             students.append(witness)
     cache[q["id"]] = students
@@ -109,9 +117,11 @@ def score_file(
         q = questions[p["id"]]
         result = {"id": p["id"], "lang": q["lang"], "difficulty": q["difficulty"], "sql": p["sql"]}
         if not p["sql"] or not is_single_select(p["sql"]):
-            results.append({**result, "status": "invalid", "detail": "not a single SELECT"})
+            results.append(
+                {**result, "status": ScoreStatus.INVALID, "detail": "not a single SELECT"}
+            )
             continue
-        status, detail = "correct", ""
+        status, detail = ScoreStatus.CORRECT, ""
         for sid in students_for(cur, q, sample, cache):
             act_as_student(cur, sid)
             expected, ref_error = run(cur, q["reference_sql"])
@@ -119,11 +129,11 @@ def score_file(
                 raise SystemExit(f"{q['id']}: the REFERENCE query fails: {ref_error}")
             got, error = run(cur, p["sql"])
             if error:
-                status, detail = "error", error
+                status, detail = ScoreStatus.ERROR, error
                 break
             if got != expected:
                 status, detail = (
-                    "wrong",
+                    ScoreStatus.WRONG,
                     f"student {sid}: {len(got)} rows, expected {len(expected)}",
                 )
                 break
@@ -133,7 +143,7 @@ def score_file(
 
 def summarize(results: list[dict]) -> dict:
     def accuracy(rows: list[dict]) -> float:
-        return round(100 * sum(r["status"] == "correct" for r in rows) / len(rows), 1)
+        return round(100 * sum(r["status"] == ScoreStatus.CORRECT for r in rows) / len(rows), 1)
 
     by = defaultdict(list)
     for r in results:
@@ -142,7 +152,10 @@ def summarize(results: list[dict]) -> dict:
     counts = Counter(r["status"] for r in results)
     summary = {"n": len(results), "accuracy": accuracy(results)}
     summary |= {f"accuracy_{k}": accuracy(v) for k, v in sorted(by.items())}
-    summary |= {f"{s}_pct": round(100 * counts[s] / len(results), 1) for s in ("invalid", "error")}
+    summary |= {
+        f"{s}_pct": round(100 * counts[s] / len(results), 1)
+        for s in (ScoreStatus.INVALID, ScoreStatus.ERROR)
+    }
     return summary
 
 
@@ -158,7 +171,7 @@ def log_mlflow(meta: dict, summary: dict, scores_path: Path) -> None:
     os.environ["MLFLOW_TRACKING_USERNAME"] = settings.mlflow_tracking_username or ""
     os.environ["MLFLOW_TRACKING_PASSWORD"] = settings.mlflow_tracking_password or ""
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-    mlflow.set_experiment("sqlibrarian-baseline")
+    mlflow.set_experiment(settings.mlflow_baseline_experiment)
     with mlflow.start_run(run_name=meta.get("run")):
         mlflow.log_params({k: v for k, v in meta.items() if not isinstance(v, int | float)})
         mlflow.log_metrics(
@@ -168,9 +181,10 @@ def log_mlflow(meta: dict, summary: dict, scores_path: Path) -> None:
 
 
 def main() -> None:
+    configure_logging()
     p = argparse.ArgumentParser()
     p.add_argument("predictions", type=Path, nargs="+")
-    p.add_argument("--questions", type=Path, default=Path("data/eval/dev_questions.jsonl"))
+    p.add_argument("--questions", type=Path, default=get_settings().paths.dev_questions)
     p.add_argument("--students", type=int, nargs="*", help="default: 5 sample students")
     p.add_argument("--mlflow", action="store_true")
     args = p.parse_args()
@@ -178,11 +192,12 @@ def main() -> None:
     lines = args.questions.read_text("utf-8").splitlines()
     questions = {q["id"]: q for q in map(json.loads, filter(str.strip, lines))}
     table = []
-    with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
-        cur.execute("SET LOCAL statement_timeout = '3s'")
+    with psycopg.connect(get_settings().records_dsn) as conn, conn.cursor() as cur:
+        timeout = get_settings().statement_timeout
+        cur.execute("SELECT set_config('statement_timeout', %s, true)", (timeout,))
         students = args.students or sample_students(cur)
         witnesses: dict[str, list[int]] = {}
-        print(f"scoring as students {students} (+1 for questions they can't test)\n")
+        log.info("score.start", students=students, note="+1 student for questions they can't test")
         for path in args.predictions:
             if path.name.endswith(".scores.jsonl"):
                 continue
@@ -199,13 +214,14 @@ def main() -> None:
                 log_mlflow(meta, summary, scores_path)
         conn.rollback()
 
+    # The score table is this command's output (stdout), not a log line.
     header = f"{'run':38s} {'all':>6s} {'en':>6s} {'ar':>6s} {'mixed':>6s} {'invalid':>8s} "
     print(header + f"{'error':>6s} {'s/q':>6s} {'p95 s':>6s} {'GPU GB':>7s}")
     for name, s, m in table:
         print(
-            f"{name:38s} {s['accuracy']:6.1f} {s.get('accuracy_lang_en', 0):6.1f} "
-            f"{s.get('accuracy_lang_ar', 0):6.1f} {s.get('accuracy_lang_mixed', 0):6.1f} "
-            f"{s['invalid_pct']:8.1f} {s['error_pct']:6.1f} {m.get('mean_seconds', 0):6.2f} "
+            f"{name:38s} {s['accuracy']:6.1f} "
+            + "".join(f"{s.get(f'accuracy_lang_{lang}', 0):6.1f} " for lang in TABLE_LANGS)
+            + f"{s['invalid_pct']:8.1f} {s['error_pct']:6.1f} {m.get('mean_seconds', 0):6.2f} "
             f"{m.get('p95_seconds', 0):6.2f} {m.get('peak_gpu_memory_gb') or 0:7.2f}"
         )
 

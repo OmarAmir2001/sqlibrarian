@@ -1,23 +1,94 @@
-"""Settings read from environment variables or the .env file in the repo root.
+"""All settings, in one typed place.
 
-Every script and the API read connection details from here, so they are written once.
+Values come from environment variables or the .env file in the repo root
+(names are case-insensitive: RECORDS_DB_URL fills records_db_url). Everything
+except secrets has a default, so the same code runs on a laptop and on Kaggle;
+override any of them in .env without touching code. .env.example lists them.
+
+    from sqlibrarian.config import get_settings
+    s = get_settings()
+    s.base_model, s.paths.dev_questions, s.records_dsn
 """
 
-from functools import lru_cache
+from functools import cached_property, lru_cache
+from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# src/sqlibrarian/config.py -> the repo root (also on Kaggle, where it's an editable install)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class Paths:
+    """Every data file the scripts read or write, built from one root."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.data = root / "data"
+        self.eval = self.data / "eval"
+        self.training = self.data / "training"
+        # evaluation
+        self.schema = self.eval / "schema.txt"
+        self.dev_questions = self.eval / "dev_questions.jsonl"
+        self.test_questions = self.eval / "test_questions.jsonl"
+        self.attacks = self.eval / "attacks.jsonl"
+        self.predictions = self.eval / "predictions"
+        self.plan_flags_expected = self.eval / "plan_flags_expected.jsonl"
+        # training data, in the order the pipeline makes it
+        self.public = self.training / "public"
+        self.public_filtered = self.training / "public_filtered"
+        self.raw_generated = self.training / "raw_generated.jsonl"
+        self.own_pairs = self.training / "own_pairs.jsonl"
+        self.own_pairs_arabic = self.training / "own_pairs_arabic.jsonl"
+        self.review_sheet = self.training / "review_sample.csv"
+        self.own_pairs_reviewed = self.training / "own_pairs_reviewed.jsonl"
+        self.own_pairs_clean = self.training / "own_pairs_clean.jsonl"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_REPO_ROOT / ".env", extra="ignore")
 
-    records_db_url: str
+    # --- secrets and connections (no defaults: they live only in .env) -------------
+    records_db_url: str | None = None
     app_db_url: str | None = None
     groq_api_key: str | None = None
-    # MLflow tracking server (DagsHub during training): only scripts that log runs need these.
     mlflow_tracking_uri: str | None = None
     mlflow_tracking_username: str | None = None
     mlflow_tracking_password: str | None = None
+
+    # --- models -----------------------------------------------------------------------
+    base_model: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"  # chosen at the P0 gate
+    pair_generator_model: str = "openai/gpt-oss-120b"  # writes training pairs (Groq)
+    pair_generator_base_url: str = "https://api.groq.com/openai/v1"
+    embedding_model: str = "intfloat/multilingual-e5-large"  # decontamination
+
+    # --- limits -----------------------------------------------------------------------
+    max_train_tokens: int = Field(2048, gt=0)  # longer training examples are dropped
+    statement_timeout: str = "3s"  # every query run against records_db
+    groq_max_calls_per_day: int = Field(30, gt=0)  # ~6,000 tokens each, under 200K/day
+    groq_wait_seconds: float = Field(45.0, ge=0)  # between calls, under 8K tokens/minute
+    decontamination_threshold: float = Field(0.9, gt=0, le=1)  # cosine similarity
+    mlflow_baseline_experiment: str = "sqlibrarian-baseline"
+
+    # --- logging ----------------------------------------------------------------------
+    log_level: str = "INFO"
+    log_format: str = "console"  # "console" on a laptop, "json" for machines
+
+    project_root: Path = _REPO_ROOT
+
+    @cached_property
+    def paths(self) -> Paths:
+        return Paths(self.project_root)
+
+    @property
+    def records_dsn(self) -> str:
+        """RECORDS_DB_URL, or a clear error for scripts that need the database.
+        (Optional in the class so GPU scripts on Kaggle, which have no database,
+        still load the settings.)"""
+        if not self.records_db_url:
+            raise SystemExit("RECORDS_DB_URL is not set: add it to .env (see .env.example)")
+        return self.records_db_url
 
 
 @lru_cache

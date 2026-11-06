@@ -3,8 +3,8 @@
 Needs no database: scoring is a separate step (score.py) on a machine that has
 records_db. Runs on a GPU (Kaggle) or, slowly, on a CPU.
 
-    python -m sqlibrarian.evaluation.generate --model Qwen/Qwen2.5-Coder-1.5B-Instruct
-    python -m sqlibrarian.evaluation.generate --model Qwen/Qwen2.5-Coder-1.5B-Instruct --few-shot
+    python -m sqlibrarian.evaluation.generate                   # settings.base_model
+    python -m sqlibrarian.evaluation.generate --model Qwen/Qwen2.5-Coder-3B-Instruct --few-shot
 
 Writes, for a run named <model>[-fewshot]:
     <out-dir>/<run>.jsonl       one line per question: id, raw reply, cleaned SQL, seconds
@@ -22,7 +22,11 @@ import transformers
 from packaging.version import Version
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from sqlibrarian.config import get_settings
+from sqlibrarian.log import configure_logging, get_logger
 from sqlibrarian.prompt import FEW_SHOT, PROMPT_VERSION, build_messages, extract_sql
+
+log = get_logger(__name__)
 
 
 def run_name(model: str, few_shot: bool) -> str:
@@ -30,11 +34,13 @@ def run_name(model: str, few_shot: bool) -> str:
 
 
 def main() -> None:
+    configure_logging()
+    s = get_settings()
     p = argparse.ArgumentParser()
-    p.add_argument("--model", required=True)
-    p.add_argument("--questions", type=Path, default=Path("data/eval/dev_questions.jsonl"))
-    p.add_argument("--schema", type=Path, default=Path("data/eval/schema.txt"))
-    p.add_argument("--out-dir", type=Path, default=Path("data/eval/predictions"))
+    p.add_argument("--model", default=s.base_model)
+    p.add_argument("--questions", type=Path, default=s.paths.dev_questions)
+    p.add_argument("--schema", type=Path, default=s.paths.schema)
+    p.add_argument("--out-dir", type=Path, default=s.paths.predictions)
     p.add_argument("--few-shot", action="store_true", help="add the 3 FEW_SHOT examples")
     p.add_argument("--max-new-tokens", type=int, default=256)
     p.add_argument("--limit", type=int, help="only the first N questions (quick test)")
@@ -59,7 +65,7 @@ def main() -> None:
     except (ValueError, KeyError) as e:
         # Some newer models (e.g. Qwen3.5) are image+text models that the text-only
         # loader refuses; their image+text class still answers text-only prompts.
-        print(f"text-only loader failed ({e}); trying the image+text loader")
+        log.warning("model.text_loader_failed", model=args.model, error=str(e)[:200])
         from transformers import AutoModelForImageTextToText
 
         model = AutoModelForImageTextToText.from_pretrained(args.model, **load_kwargs)
@@ -100,7 +106,10 @@ def main() -> None:
                 "seconds": round(took, 3),
             }
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            print(f"[{i}/{len(questions)}] {q['id']} {took:5.2f}s  {row['sql'][:80]!r}")
+            log.info(
+                "generate.answer", n=i, of=len(questions), id=q["id"],
+                seconds=round(took, 2), sql=row["sql"][:80],
+            )  # fmt: skip
 
     ordered = sorted(seconds)
     meta = {
@@ -118,7 +127,7 @@ def main() -> None:
         "peak_gpu_memory_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2) if cuda else None,
     }
     (args.out_dir / f"{name}.meta.json").write_text(json.dumps(meta, indent=2) + "\n", "utf-8")
-    print(json.dumps(meta, indent=2))
+    log.info("generate.done", **meta)
 
 
 if __name__ == "__main__":
