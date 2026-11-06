@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     # --- limits -----------------------------------------------------------------------
     max_train_tokens: int = Field(2048, gt=0)  # longer training examples are dropped
     statement_timeout: str = "3s"  # every query run against records_db
+    result_row_limit: int = Field(200, gt=0)  # the guard adds LIMIT 200 to every query
     groq_max_calls_per_day: int = Field(30, gt=0)  # ~6,000 tokens each, under 200K/day
     groq_wait_seconds: float = Field(45.0, ge=0)  # between calls, under 8K tokens/minute
     decontamination_threshold: float = Field(0.9, gt=0, le=1)  # cosine similarity
