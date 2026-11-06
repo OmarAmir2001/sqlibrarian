@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     records_db_url: str
     app_db_url: str | None = None
     groq_api_key: str | None = None
+    # MLflow tracking server (DagsHub during training): only scripts that log runs need these.
+    mlflow_tracking_uri: str | None = None
+    mlflow_tracking_username: str | None = None
+    mlflow_tracking_password: str | None = None
 
 
 @lru_cache

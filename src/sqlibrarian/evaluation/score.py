@@ -21,11 +21,12 @@ rolled back, with a 3 second limit, and only single SELECTs are run at all.
 
 Writes <run>.scores.jsonl (one line per question) next to each predictions file,
 and prints a summary table. --mlflow also logs each run to MLflow
-(MLFLOW_TRACKING_URI, e.g. DagsHub; needs `pip install mlflow`).
+(MLFLOW_TRACKING_* in .env, e.g. DagsHub; run with `uv run --with mlflow`).
 """
 
 import argparse
 import json
+import os
 from collections import Counter, defaultdict
 from decimal import Decimal
 from pathlib import Path
@@ -150,6 +151,13 @@ def log_mlflow(meta: dict, summary: dict, scores_path: Path) -> None:
         import mlflow
     except ImportError as e:
         raise SystemExit("--mlflow needs the mlflow package: uv run --with mlflow ...") from e
+    settings = get_settings()
+    if not settings.mlflow_tracking_uri:
+        raise SystemExit("--mlflow needs MLFLOW_TRACKING_URI (and username/password) in .env")
+    # MLflow reads its login from environment variables; copy them from .env.
+    os.environ["MLFLOW_TRACKING_USERNAME"] = settings.mlflow_tracking_username or ""
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = settings.mlflow_tracking_password or ""
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
     mlflow.set_experiment("sqlibrarian-baseline")
     with mlflow.start_run(run_name=meta.get("run")):
         mlflow.log_params({k: v for k, v in meta.items() if not isinstance(v, int | float)})
