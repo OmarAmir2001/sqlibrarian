@@ -5,7 +5,22 @@ build/
 dist/
 wheels/
 *.egg-info
+.ruff_cache/
+.pytest_cache/
 
-# Virtual environments
+# Virtual environments and secrets
 .venv
 .env
+
+# Private notes (CLAUDE.md, evolution.md, zips) — never committed
+notes/
+CLAUDE.local.md
+
+# Generated training data: versions live on the Hugging Face Hub
+data/training/*
+!data/training/.gitkeep
+
+# Local databases and experiment runs
+*.db
+mlruns/
+mlartifacts/
