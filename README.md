@@ -24,3 +24,17 @@ uv sync                      # install dependencies (Python 3.12)
 uv run pre-commit install    # run Ruff on every commit
 uv run ruff check . && uv run pytest
 ```
+
+### Databases
+
+Two PostgreSQL 16 databases run in Docker: `records_db` (the simulated student records, port 5433)
+and `app_db` (SQLibrarian's own data, port 5434).
+
+```bash
+cp .env.example .env          # then set real passwords
+docker compose --env-file .env -f infra/docker-compose.yml up -d
+docker compose --env-file .env -f infra/docker-compose.yml ps     # both should be "healthy"
+```
+
+The `.sql` files in `db/records/` and `db/app/` run only when a volume is first created.
+After changing one, rebuild with `down -v` (this deletes the data), then `up -d`.
