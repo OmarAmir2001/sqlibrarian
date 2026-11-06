@@ -2,6 +2,7 @@
 
 **Date:** 2026-11-06 · **Phase:** P0 (gate: choose the base model)
 **Decision:** fine-tune **`Qwen/Qwen2.5-Coder-1.5B-Instruct`**; `Qwen2.5-Coder-3B-Instruct` stays the fallback.
+**Runs in MLflow:** experiment `sqlibrarian-baseline` on [DagsHub](https://dagshub.com/omaramir2001/sqlibrarian.mlflow/#/experiments/0) (one run per model, with the per-question scores attached).
 
 ## Result
 
