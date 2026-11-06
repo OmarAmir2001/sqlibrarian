@@ -31,7 +31,8 @@ class Paths:
         # evaluation
         self.schema = self.eval / "schema.txt"
         self.dev_questions = self.eval / "dev_questions.jsonl"
-        self.test_questions = self.eval / "test_questions.jsonl"
+        self.test_questions = self.eval / "test_questions.jsonl"  # built, frozen at testset-v1
+        self.test_questions_csv = self.eval / "test_questions.csv"  # written by hand
         self.attacks = self.eval / "attacks.jsonl"
         self.predictions = self.eval / "predictions"
         self.plan_flags_expected = self.eval / "plan_flags_expected.jsonl"
@@ -70,6 +71,7 @@ class Settings(BaseSettings):
     groq_wait_seconds: float = Field(45.0, ge=0)  # between calls, under 8K tokens/minute
     decontamination_threshold: float = Field(0.9, gt=0, le=1)  # cosine similarity
     mlflow_baseline_experiment: str = "sqlibrarian-baseline"
+    test_set_per_lang: int = Field(100, gt=0)  # en / ar / mixed questions in the test set
 
     # --- logging ----------------------------------------------------------------------
     log_level: str = "INFO"

@@ -77,3 +77,20 @@ class ScoreStatus(StrEnum):
     WRONG = "wrong"
     ERROR = "error"
     INVALID = "invalid"
+
+
+class QuestionKind(StrEnum):
+    """What a test question asks about, so the test set covers every use case."""
+
+    GRADE = "grade"  # grade or mark in one course
+    GPA = "gpa"  # cumulative or term GPA
+    FAILED = "failed"  # failed or repeated courses
+    CREDIT_HOURS = "credit_hours"  # hours passed, registered, electives
+    COURSES_LEFT = "courses_left"  # required / elective courses still to take
+    AVAILABLE_NEXT = "available_next"  # courses the student can take next term
+    PREREQUISITES = "prerequisites"  # missing prerequisites for a course
+    PLAN = "plan"  # next-term plan: status, courses
+    THIS_TERM = "this_term"  # current registration, marks not recorded yet
+    COMPARE_TERMS = "compare_terms"  # best / worst term, improvement
+    PROFILE = "profile"  # advisor, program, level, credit limit
+    OTHER = "other"
