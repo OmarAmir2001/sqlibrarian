@@ -1,0 +1,53 @@
+# Two PostgreSQL 16 databases for local development.
+#
+#   records-db  plays the institute's Student Records System (external, read by SQLibrarian)
+#   app-db      holds what SQLibrarian owns (users, query log, plan flags, audit log)
+#
+# Start (from the repo root; --env-file because the file lives in infra/):
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d
+# Rebuild from scratch (deletes all data; the .sql files run again on the next start):
+#   docker compose --env-file .env -f infra/docker-compose.yml down -v
+#
+# PostgreSQL runs every .sql file in /docker-entrypoint-initdb.d, in name order,
+# only the FIRST time a volume is created. After editing a .sql file, use down -v.
+
+name: sqlibrarian
+
+services:
+  records-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${RECORDS_DB_USER:?set RECORDS_DB_USER in .env}
+      POSTGRES_PASSWORD: ${RECORDS_DB_PASSWORD:?set RECORDS_DB_PASSWORD in .env}
+      POSTGRES_DB: ${RECORDS_DB_NAME:-records_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - records-data:/var/lib/postgresql/data
+      - ../db/records:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${APP_DB_USER:?set APP_DB_USER in .env}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+      POSTGRES_DB: ${APP_DB_NAME:-app_db}
+    ports:
+      - "5434:5432"
+    volumes:
+      - app-data:/var/lib/postgresql/data
+      - ../db/app:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  records-data:
+  app-data:

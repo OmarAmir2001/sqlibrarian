@@ -1,0 +1,44 @@
+{"plan_id": 4, "student_id": 261964, "rule": "over_credit_limit", "details": "24 credit hours, limit 21 for GPA none yet (new student)"}
+{"plan_id": 6, "student_id": 255050, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.0"}
+{"plan_id": 8, "student_id": 265409, "rule": "over_credit_limit", "details": "23 credit hours, limit 21 for GPA none yet (new student)"}
+{"plan_id": 27, "student_id": 267736, "rule": "over_credit_limit", "details": "23 credit hours, limit 21 for GPA none yet (new student)"}
+{"plan_id": 30, "student_id": 257622, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.48"}
+{"plan_id": 33, "student_id": 264465, "rule": "over_credit_limit", "details": "24 credit hours, limit 21 for GPA none yet (new student)"}
+{"plan_id": 34, "student_id": 266511, "rule": "over_credit_limit", "details": "24 credit hours, limit 21 for GPA none yet (new student)"}
+{"plan_id": 38, "student_id": 250243, "rule": "missing_prerequisite", "details": "CS 205 needs CS 202"}
+{"plan_id": 42, "student_id": 261773, "rule": "missing_prerequisite", "details": "CS 408 needs CS 203"}
+{"plan_id": 45, "student_id": 250125, "rule": "already_passed", "details": "CS 102 was already passed"}
+{"plan_id": 49, "student_id": 259795, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.16"}
+{"plan_id": 66, "student_id": 250436, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.4"}
+{"plan_id": 82, "student_id": 257846, "rule": "already_passed", "details": "BS 104 was already passed"}
+{"plan_id": 86, "student_id": 240154, "rule": "missing_prerequisite", "details": "CS 314 needs CS 203"}
+{"plan_id": 89, "student_id": 251404, "rule": "already_passed", "details": "BS 104 was already passed"}
+{"plan_id": 99, "student_id": 243613, "rule": "already_passed", "details": "H 102 was already passed"}
+{"plan_id": 109, "student_id": 258655, "rule": "missing_prerequisite", "details": "CS 203 needs CS 201"}
+{"plan_id": 118, "student_id": 247552, "rule": "already_passed", "details": "H 103 was already passed"}
+{"plan_id": 121, "student_id": 245761, "rule": "already_passed", "details": "H 202 was already passed"}
+{"plan_id": 148, "student_id": 250190, "rule": "missing_prerequisite", "details": "CS 419 needs CS 403"}
+{"plan_id": 150, "student_id": 243652, "rule": "over_credit_limit", "details": "17 credit hours, limit 15 for GPA 1.63"}
+{"plan_id": 159, "student_id": 241189, "rule": "already_passed", "details": "BS 104 was already passed"}
+{"plan_id": 161, "student_id": 248992, "rule": "already_passed", "details": "CS 205 was already passed"}
+{"plan_id": 165, "student_id": 235961, "rule": "already_passed", "details": "CS 204 was already passed"}
+{"plan_id": 173, "student_id": 249226, "rule": "missing_prerequisite", "details": "CS 409 needs CS 308"}
+{"plan_id": 181, "student_id": 243259, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.26"}
+{"plan_id": 186, "student_id": 248060, "rule": "over_credit_limit", "details": "18 credit hours, limit 15 for GPA 1.93"}
+{"plan_id": 204, "student_id": 240694, "rule": "missing_prerequisite", "details": "CS 499 needs CS 498"}
+{"plan_id": 207, "student_id": 249747, "rule": "missing_prerequisite", "details": "CS 414 needs CS 403"}
+{"plan_id": 216, "student_id": 245739, "rule": "over_credit_limit", "details": "18 credit hours, limit 15 for GPA 1.98"}
+{"plan_id": 218, "student_id": 244227, "rule": "over_credit_limit", "details": "18 credit hours, limit 15 for GPA 1.81"}
+{"plan_id": 222, "student_id": 237974, "rule": "missing_prerequisite", "details": "CS 316 needs CS 203"}
+{"plan_id": 227, "student_id": 241595, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.76"}
+{"plan_id": 234, "student_id": 241485, "rule": "missing_prerequisite", "details": "CS 401 needs CS 203"}
+{"plan_id": 248, "student_id": 231260, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.01"}
+{"plan_id": 257, "student_id": 235111, "rule": "missing_prerequisite", "details": "CS 419 needs CS 403"}
+{"plan_id": 259, "student_id": 233261, "rule": "already_passed", "details": "H 101 was already passed"}
+{"plan_id": 268, "student_id": 231479, "rule": "already_passed", "details": "CS 305 was already passed"}
+{"plan_id": 270, "student_id": 236656, "rule": "over_credit_limit", "details": "21 credit hours, limit 18 for GPA 2.05"}
+{"plan_id": 272, "student_id": 235006, "rule": "already_passed", "details": "BS 202 was already passed"}
+{"plan_id": 273, "student_id": 239716, "rule": "missing_prerequisite", "details": "CS 419 needs CS 403"}
+{"plan_id": 283, "student_id": 238410, "rule": "already_passed", "details": "BS 103 was already passed"}
+{"plan_id": 290, "student_id": 237675, "rule": "missing_prerequisite", "details": "CS 410 needs CS 305"}
+{"plan_id": 292, "student_id": 232598, "rule": "already_passed", "details": "BS 101 was already passed"}
