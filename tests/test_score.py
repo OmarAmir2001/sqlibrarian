@@ -24,3 +24,12 @@ def test_summarize_counts_each_status():
     assert s["accuracy"] == 25.0
     assert s["accuracy_lang_en"] == 100.0 and s["accuracy_lang_ar"] == 0.0
     assert s["invalid_pct"] == 25.0 and s["error_pct"] == 25.0
+
+
+def test_says_something():
+    from sqlibrarian.evaluation.score import says_something
+
+    assert not says_something([])
+    assert not says_something([(None,), (0,)])
+    assert not says_something([(False,)])
+    assert says_something([(None, "B+")])

@@ -10,7 +10,9 @@ How one question is scored:
   correct  same rows as the reference for every sample student
 
 Each query runs as several different students (see evaluation/db.py), so a query is
-only correct if it works for weak, strong, new and IS students alike. Rows are
+only correct if it works for weak, strong, new and IS students alike. When none of
+them gets a meaningful answer (nobody took the course asked about), one more student
+who does is added for that question, so empty never matches empty by luck. Rows are
 compared as sorted lists, numbers rounded to 2 decimals; column names don't matter,
 but the columns and their order do (standard execution accuracy).
 
@@ -57,8 +59,48 @@ def run(cur: psycopg.Cursor, sql: str) -> tuple[list[tuple] | None, str | None]:
         cur.execute("ROLLBACK TO SAVEPOINT q")
 
 
+def says_something(rows: list[tuple]) -> bool:
+    """False for no rows, or only NULL / 0 / false values: an answer a wrong query
+    could easily match by accident."""
+    return any(v not in (None, 0, False) for r in rows for v in r)
+
+
+def students_for(
+    cur: psycopg.Cursor, q: dict, sample: list[int], cache: dict[str, list[int]]
+) -> list[int]:
+    """The sample students, plus one more if none of them gets a meaningful answer
+    (e.g. nobody in the sample took the course asked about). Without that witness,
+    an empty answer would match an empty wrong answer."""
+    if q["id"] in cache:
+        return cache[q["id"]]
+    students = list(sample)
+
+    def answer(sid: int) -> list[tuple]:
+        act_as_student(cur, sid)
+        rows, error = run(cur, q["reference_sql"])
+        if error:
+            raise SystemExit(f"{q['id']}: the REFERENCE query fails: {error}")
+        return rows
+
+    if not any(says_something(answer(s)) for s in sample):
+        cur.execute("SELECT student_id FROM public.students ORDER BY student_id")
+        everyone = [r[0] for r in cur.fetchall()]
+        witness = next((s for s in everyone if says_something(answer(s))), None)
+        witness = witness or next((s for s in everyone if answer(s)), None)
+        if witness is None:
+            print(f"warning: {q['id']} has an empty answer for every student; it tests nothing")
+        else:
+            students.append(witness)
+    cache[q["id"]] = students
+    return students
+
+
 def score_file(
-    cur: psycopg.Cursor, predictions: Path, questions: dict[str, dict], students: list[int]
+    cur: psycopg.Cursor,
+    predictions: Path,
+    questions: dict[str, dict],
+    sample: list[int],
+    cache: dict[str, list[int]],
 ) -> list[dict]:
     preds = [json.loads(x) for x in predictions.read_text("utf-8").splitlines() if x.strip()]
     results = []
@@ -69,7 +111,7 @@ def score_file(
             results.append({**result, "status": "invalid", "detail": "not a single SELECT"})
             continue
         status, detail = "correct", ""
-        for sid in students:
+        for sid in students_for(cur, q, sample, cache):
             act_as_student(cur, sid)
             expected, ref_error = run(cur, q["reference_sql"])
             if ref_error:
@@ -131,11 +173,12 @@ def main() -> None:
     with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
         cur.execute("SET LOCAL statement_timeout = '3s'")
         students = args.students or sample_students(cur)
-        print(f"scoring as students {students}\n")
+        witnesses: dict[str, list[int]] = {}
+        print(f"scoring as students {students} (+1 for questions they can't test)\n")
         for path in args.predictions:
             if path.name.endswith(".scores.jsonl"):
                 continue
-            results = score_file(cur, path, questions, students)
+            results = score_file(cur, path, questions, students, witnesses)
             summary = summarize(results)
             scores_path = path.with_name(path.name.removesuffix(".jsonl") + ".scores.jsonl")
             scores_path.write_text(
