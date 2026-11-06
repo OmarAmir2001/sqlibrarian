@@ -12,11 +12,20 @@ dependencies = [
     "psycopg[binary]>=3.3.8",
     "pydantic-settings>=2.16.2",
     "sqlalchemy>=2.1.8",
+    "sqlglot>=30.30.0",
     "uvicorn[standard]>=0.54.0",
 ]
 
 [project.scripts]
 sqlibrarian = "sqlibrarian:main"
+
+[project.optional-dependencies]
+training = [
+    "datasets>=5.1.0",
+    "openai>=3.46.0",
+    "python-dotenv>=1.2.4",
+    "sentence-transformers>=6.2.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
