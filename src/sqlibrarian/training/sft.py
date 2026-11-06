@@ -24,6 +24,8 @@ import os
 import time
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from sqlibrarian.helpers.config import get_settings
 from sqlibrarian.helpers.hub import dataset_repo, dataset_revision, model_repo
 from sqlibrarian.helpers.lineage import git_commit
@@ -89,7 +91,7 @@ def load_model(cfg: SFTRunConfig):
     return model, tokenizer, peft_config
 
 
-def save_bundle(folder: Path, cfg: SFTRunConfig, lineage: dict) -> None:
+def save_bundle(folder: Path, cfg: BaseModel, lineage: dict) -> None:
     """Next to the weights: what the model must be fed (schema + prompt version) and
     what produced it."""
     s = get_settings()
