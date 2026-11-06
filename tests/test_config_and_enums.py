@@ -8,10 +8,12 @@ import pytest
 
 from sqlibrarian.helpers.config import Settings
 from sqlibrarian.helpers.enums import (
+    AskOutcome,
     EnrollmentStatus,
     PlanRule,
     PlanStatus,
     Program,
+    Role,
     Season,
     TermType,
 )
@@ -35,6 +37,8 @@ def check_values(sql: str, column: str) -> set[str]:
         (TermType, RECORDS_SQL, "term_type"),
         (EnrollmentStatus, RECORDS_SQL, "status"),
         (PlanRule, APP_SQL, "rule"),
+        (Role, APP_SQL, "role"),
+        (AskOutcome, APP_SQL, "outcome"),
     ],
 )
 def test_enum_matches_schema_check(enum, sql, column):

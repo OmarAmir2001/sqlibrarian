@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     mlflow_tracking_username: str | None = None
     mlflow_tracking_password: str | None = None
     hf_token: str | None = None  # write token: datasets and models on the Hugging Face Hub
+    # The API's database roles (row-level security applies to them)
+    reader_db_url: str | None = None
+    approver_db_url: str | None = None
+    checker_db_url: str | None = None
+    jwt_secret: str | None = None
+    demo_password: str | None = None  # one password for every fake user (db/seed_users.py)
 
     # --- models -----------------------------------------------------------------------
     base_model: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"  # chosen at the P0 gate
@@ -85,6 +91,16 @@ class Settings(BaseSettings):
     mlflow_sft_experiment: str = "sqlibrarian-sft"
     mlflow_grpo_experiment: str = "sqlibrarian-grpo"
 
+    # --- API ---------------------------------------------------------------------------
+    # Any OpenAI-compatible server: llama.cpp `llama-server` (CPU, GGUF) or vLLM (GPU).
+    model_server_url: str = "http://localhost:8080/v1"
+    served_model_name: str = "sqlibrarian"  # llama.cpp ignores it; vLLM --served-model-name
+    generation_max_tokens: int = Field(256, gt=0)
+    model_timeout_seconds: float = Field(30.0, gt=0)
+    jwt_ttl_minutes: int = Field(60, gt=0)
+    question_max_chars: int = Field(500, gt=0)
+    api_url: str = "http://localhost:8000"  # where the UI finds the API
+
     # --- logging ----------------------------------------------------------------------
     log_level: str = "INFO"
     log_format: str = "console"  # "console" on a laptop, "json" for machines
@@ -103,6 +119,13 @@ class Settings(BaseSettings):
         if not self.records_db_url:
             raise SystemExit("RECORDS_DB_URL is not set: add it to .env (see .env.example)")
         return self.records_db_url
+
+    def require(self, field: str) -> str:
+        """A setting the running code needs, or a clear error naming it."""
+        value = getattr(self, field)
+        if not value:
+            raise SystemExit(f"{field.upper()} is not set: add it to .env (see .env.example)")
+        return value
 
 
 @lru_cache

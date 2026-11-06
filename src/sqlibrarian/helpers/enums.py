@@ -94,3 +94,20 @@ class QuestionKind(StrEnum):
     COMPARE_TERMS = "compare_terms"  # best / worst term, improvement
     PROFILE = "profile"  # advisor, program, level, credit limit
     OTHER = "other"
+
+
+class Role(StrEnum):
+    """app_db.users.role"""
+
+    STUDENT = "student"
+    TA = "ta"
+
+
+class AskOutcome(StrEnum):
+    """app_db.query_log.outcome"""
+
+    ANSWERED = "answered"
+    NO_ROWS = "no_rows"
+    REJECTED = "rejected"  # the guard refused the generated SQL
+    DB_ERROR = "db_error"  # still failing after the one retry
+    MODEL_ERROR = "model_error"  # the model server failed or wrote no SQL
