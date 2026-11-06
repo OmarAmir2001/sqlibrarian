@@ -18,9 +18,9 @@ import random
 import time
 from pathlib import Path
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.enums import Lang
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import Lang
+from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.training.groq_client import CALL_ERRORS, make_client
 
 log = get_logger(__name__)

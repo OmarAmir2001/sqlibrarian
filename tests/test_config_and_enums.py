@@ -6,8 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from sqlibrarian.config import Settings
-from sqlibrarian.enums import EnrollmentStatus, PlanRule, PlanStatus, Program, Season, TermType
+from sqlibrarian.helpers.config import Settings
+from sqlibrarian.helpers.enums import (
+    EnrollmentStatus,
+    PlanRule,
+    PlanStatus,
+    Program,
+    Season,
+    TermType,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RECORDS_SQL = (ROOT / "db/records/01_schema.sql").read_text("utf-8")

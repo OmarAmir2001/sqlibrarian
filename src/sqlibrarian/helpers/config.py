@@ -5,7 +5,7 @@ Values come from environment variables or the .env file in the repo root
 except secrets has a default, so the same code runs on a laptop and on Kaggle;
 override any of them in .env without touching code. .env.example lists them.
 
-    from sqlibrarian.config import get_settings
+    from sqlibrarian.helpers.config import get_settings
     s = get_settings()
     s.base_model, s.paths.dev_questions, s.records_dsn
 """
@@ -16,8 +16,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# src/sqlibrarian/config.py -> the repo root (also on Kaggle, where it's an editable install)
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+# src/sqlibrarian/helpers/config.py -> the repo root (also on Kaggle: editable install)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Paths:

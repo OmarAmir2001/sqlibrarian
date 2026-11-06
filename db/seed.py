@@ -21,8 +21,8 @@ from datetime import UTC, datetime, timedelta
 
 import psycopg
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.enums import (
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import (
     Difficulty,
     EnrollmentStatus,
     PlanRule,
@@ -30,7 +30,7 @@ from sqlibrarian.enums import (
     Program,
     TermType,
 )
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.log import configure_logging, get_logger
 
 log = get_logger(__name__)
 

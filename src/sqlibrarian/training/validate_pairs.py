@@ -19,9 +19,9 @@ from pathlib import Path
 
 import psycopg
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.enums import Lang
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import Lang
+from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.training.sql_utils import (
     course_names_used,
     filters_by_student,

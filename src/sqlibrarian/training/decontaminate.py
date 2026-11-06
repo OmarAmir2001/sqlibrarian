@@ -20,8 +20,8 @@ from pathlib import Path
 
 from sentence_transformers import SentenceTransformer
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.training.sql_utils import normalize_sql
 
 log = get_logger(__name__)

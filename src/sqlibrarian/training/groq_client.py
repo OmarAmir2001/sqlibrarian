@@ -6,7 +6,7 @@ Model name, URL and key all come from settings, so switching model or provider i
 
 import openai
 
-from sqlibrarian.config import get_settings
+from sqlibrarian.helpers.config import get_settings
 
 # Errors after which a call is skipped (rate limit, network, a reply that isn't JSON).
 CALL_ERRORS = (openai.OpenAIError, ValueError, KeyError, TypeError)

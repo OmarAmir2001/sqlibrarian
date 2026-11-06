@@ -16,9 +16,9 @@ from pathlib import Path
 
 from datasets import Dataset, DatasetDict, load_dataset
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.log import configure_logging, get_logger
-from sqlibrarian.prompt import build_messages
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
+from sqlibrarian.helpers.prompt import build_messages
 
 log = get_logger(__name__)
 

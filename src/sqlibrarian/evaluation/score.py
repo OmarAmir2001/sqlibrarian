@@ -33,10 +33,10 @@ from pathlib import Path
 
 import psycopg
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.enums import Lang, ScoreStatus
 from sqlibrarian.evaluation.db import act_as_student, sample_students
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import Lang, ScoreStatus
+from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.training.sql_utils import is_single_select
 
 log = get_logger(__name__)

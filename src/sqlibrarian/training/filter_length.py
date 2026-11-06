@@ -20,8 +20,8 @@ from pathlib import Path
 from datasets import DatasetDict, load_from_disk
 from transformers import AutoTokenizer
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.log import configure_logging, get_logger
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
 
 log = get_logger(__name__)
 

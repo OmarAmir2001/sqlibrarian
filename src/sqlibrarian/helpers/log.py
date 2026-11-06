@@ -16,7 +16,7 @@ import sys
 
 import structlog
 
-from sqlibrarian.config import get_settings
+from sqlibrarian.helpers.config import get_settings
 
 
 def configure_logging() -> None:

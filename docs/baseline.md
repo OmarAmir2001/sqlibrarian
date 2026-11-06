@@ -59,7 +59,7 @@ instead of filtering.
   15 Modern Standard Arabic, 15 Egyptian Arabic or mixed; 20 easy, 18 medium, 12 hard.
   They are a development set, not the test set: the 300-question test set (P1) is hand-written
   and is what the 80% target is measured on.
-- **Prompt:** `prompt.py`, version `v1`: one system line, the schema text exported from the
+- **Prompt:** `helpers/prompt.py`, version `v1`: one system line, the schema text exported from the
   database comments (`data/eval/schema.txt`, 1,434 tokens), the question. The few-shot run adds
   three example pairs that are not in the dev set.
 - **Generation:** Kaggle, one Tesla T4, float16, Hugging Face `transformers`, greedy decoding,

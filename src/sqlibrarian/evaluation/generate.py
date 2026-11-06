@@ -22,9 +22,9 @@ import transformers
 from packaging.version import Version
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from sqlibrarian.config import get_settings
-from sqlibrarian.log import configure_logging, get_logger
-from sqlibrarian.prompt import FEW_SHOT, PROMPT_VERSION, build_messages, extract_sql
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
+from sqlibrarian.helpers.prompt import FEW_SHOT, PROMPT_VERSION, build_messages, extract_sql
 
 log = get_logger(__name__)
 

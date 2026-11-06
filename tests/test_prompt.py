@@ -1,6 +1,6 @@
 import pytest
 
-from sqlibrarian.prompt import SYSTEM, build_messages, extract_sql
+from sqlibrarian.helpers.prompt import SYSTEM, build_messages, extract_sql
 
 
 def test_messages_without_sql_have_system_and_user_only():
