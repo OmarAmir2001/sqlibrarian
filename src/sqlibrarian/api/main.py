@@ -9,14 +9,18 @@ Routes:
     GET  /health        is the API up, and can it reach both databases?
     POST /auth/login    username + password -> token
     POST /ask           a question -> answer, the SQL that ran, the rows
+    GET  /plans/pending           (TA) advisees' pending plans with the checker's flags
+    POST /plans/{plan_id}/review  (TA) approve or reject: the only write
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from psycopg_pool import AsyncConnectionPool
+from pydantic import BaseModel
 
+from sqlibrarian.api import approvals
 from sqlibrarian.api.generator import Generator
 from sqlibrarian.api.identity import CurrentUser, authenticate, create_token
 from sqlibrarian.api.orchestrator import Orchestrator
@@ -33,18 +37,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
     reader = AsyncConnectionPool(s.require("reader_db_url"), open=False, min_size=1, max_size=10)
     app_db = AsyncConnectionPool(s.require("app_db_url"), open=False, min_size=1, max_size=5)
-    await reader.open()
-    await app_db.open()
+    approver = AsyncConnectionPool(s.require("approver_db_url"), open=False, min_size=1, max_size=3)
+    for pool in (reader, app_db, approver):
+        await pool.open()
     generator = getattr(app.state, "generator", None) or Generator()
     app.state.app_pool = app_db
+    app.state.approver_pool = approver
     app.state.orchestrator = Orchestrator(generator, reader, app_db)
     log.info("api.started", model_server=s.model_server_url)
     try:
         yield
     finally:
         await generator.aclose()
-        await reader.close()
-        await app_db.close()
+        for pool in (reader, app_db, approver):
+            await pool.close()
 
 
 app = FastAPI(title="SQLibrarian", lifespan=lifespan)
@@ -83,3 +89,32 @@ async def ask(body: AskRequest, request: Request, identity: CurrentUser) -> AskR
         answer=result.answer, sql=result.sql, columns=result.columns, rows=result.rows,
         outcome=result.outcome, timings_ms=result.timings_ms,
     )  # fmt: skip
+
+
+class ReviewRequest(BaseModel):
+    decision: approvals.Decision
+
+
+@app.get("/plans/pending")
+async def plans_pending(request: Request, identity: CurrentUser) -> list[dict]:
+    try:
+        plans = await approvals.pending_plans(
+            request.app.state.orchestrator.reader_pool, request.app.state.app_pool, identity
+        )
+    except approvals.ReviewError as e:
+        raise HTTPException(e.status_code, str(e)) from e
+    return [p.__dict__ for p in plans]
+
+
+@app.post("/plans/{plan_id}/review")
+async def review_plan(
+    plan_id: int, body: ReviewRequest, request: Request, identity: CurrentUser
+) -> dict:
+    try:
+        status = await approvals.review(
+            request.app.state.approver_pool, request.app.state.app_pool, identity, plan_id,
+            body.decision,
+        )  # fmt: skip
+    except approvals.ReviewError as e:
+        raise HTTPException(e.status_code, str(e)) from e
+    return {"plan_id": plan_id, "status": status}
