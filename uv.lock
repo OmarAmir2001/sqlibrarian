@@ -2847,9 +2847,11 @@ dependencies = [
 [package.optional-dependencies]
 training = [
     { name = "datasets" },
+    { name = "jinja2" },
     { name = "openai" },
     { name = "python-dotenv" },
     { name = "sentence-transformers" },
+    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -2864,6 +2866,7 @@ dev = [
 requires-dist = [
     { name = "datasets", marker = "extra == 'training'", specifier = ">=5.1.0" },
     { name = "fastapi", specifier = ">=0.162.0" },
+    { name = "jinja2", marker = "extra == 'training'", specifier = ">=3.1.6" },
     { name = "openai", marker = "extra == 'training'", specifier = ">=3.46.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.8" },
     { name = "pydantic-settings", specifier = ">=2.16.2" },
@@ -2871,6 +2874,7 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'training'", specifier = ">=6.2.0" },
     { name = "sqlalchemy", specifier = ">=2.1.8" },
     { name = "sqlglot", specifier = ">=30.30.0" },
+    { name = "transformers", marker = "extra == 'training'", specifier = ">=5.22.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 provides-extras = ["training"]
