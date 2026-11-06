@@ -3,7 +3,7 @@ then remove duplicates.
 
 Checks, in order (each rejection is counted so you can see where pairs die):
   1. the SQL is exactly one SELECT
-  2. it doesn't hard-code a student_id
+  2. every course it names exists, and it doesn't filter by student
   3. it runs on records_db within 3 seconds, read-only
   4. it returns rows (empty is allowed only for "not recorded yet" questions)
   5. its normalized form hasn't been seen before
@@ -23,6 +23,7 @@ import psycopg
 from dotenv import load_dotenv
 
 from sqlibrarian.training.sql_utils import (
+    course_names_used,
     filters_by_student,
     is_single_select,
     normalize_sql,
@@ -53,6 +54,8 @@ def main() -> None:
 
     kept, seen, reasons = [], set(), Counter()
     with psycopg.connect(os.environ["RECORDS_DB_URL"], autocommit=True) as conn:
+        titles = conn.execute("SELECT title_en, title_ar FROM courses").fetchall()
+        known_courses = {t for row in titles for t in row}
         for line in args.raw.read_text(encoding="utf-8").splitlines():
             batch = json.loads(line)
             for pair in batch["pairs"]:
@@ -63,6 +66,10 @@ def main() -> None:
                     continue
                 if not is_single_select(sql):
                     reasons["not a single SELECT"] += 1
+                    continue
+                unknown = course_names_used(sql) - known_courses
+                if unknown:
+                    reasons["unknown course name"] += 1
                     continue
                 if filters_by_student(sql):
                     reasons["filters by student"] += 1

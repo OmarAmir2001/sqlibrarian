@@ -69,3 +69,14 @@ def test_join_on_student_id_allowed():
         "JOIN enrollments e ON e.student_id = s.student_id"
     )
     assert not filters_by_student(sql)
+
+
+def test_course_names_used():
+    from sqlibrarian.training.sql_utils import course_names_used
+
+    sql = (
+        "SELECT e.total FROM enrollments e JOIN courses c ON c.course_code = e.course_code "
+        "WHERE c.title_en = 'Data Structures' OR c.title_ar IN ('هياكل البيانات', 'نظم التشغيل') "
+        "AND e.status = 'passed'"
+    )
+    assert course_names_used(sql) == {"Data Structures", "هياكل البيانات", "نظم التشغيل"}

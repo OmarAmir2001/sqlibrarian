@@ -48,3 +48,15 @@ def filters_by_student(sql: str) -> bool:
 
 # Old name, kept so existing callers keep working.
 filters_on_student_literal = filters_by_student
+
+
+def course_names_used(sql: str) -> set[str]:
+    """Course names the query matches exactly, e.g. {'Data Structures'} from
+    WHERE c.title_en = 'Data Structures' (or title_ar, or IN ('...', '...'))."""
+    tree = sqlglot.parse_one(sql, read="postgres")
+    names = set()
+    for cmp in tree.find_all(exp.EQ, exp.In):
+        cols = [x for x in cmp.find_all(exp.Column) if x.name in ("title_en", "title_ar")]
+        if cols:
+            names |= {lit.this for lit in cmp.find_all(exp.Literal) if lit.is_string}
+    return names

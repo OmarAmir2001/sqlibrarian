@@ -1,12 +1,12 @@
 """Step 2.2 (1-3): generate question + SQL pairs for YOUR schema with Groq's free tier.
 
 Free-tier limits for openai/gpt-oss-120b: 8,000 tokens a minute and 200,000 a
-day. One call is about 5,000 tokens, so the script waits between calls and
+day. One call is about 5,500 tokens, so the script waits between calls and
 stops after --max-calls. Run it once a day; it appends to the same file, so
 nothing is lost between days.
 
 Run (laptop, with GROQ_API_KEY in .env):
-    uv run python -m sqlibrarian.training.generate_pairs --max-calls 38
+    uv run python -m sqlibrarian.training.generate_pairs --max-calls 34
 """
 
 import argparse
@@ -48,6 +48,7 @@ Rules:
 - One PostgreSQL SELECT per question. No INSERT, UPDATE, DELETE.
 - Use only the tables and columns above, each on its own table (credit_hours is in courses).
 - Find a course by its name (courses.title_en or title_ar), never by guessing its code.
+  Use only courses from the list, with their names written exactly as in the list.
 - Cumulative GPA is students.cumulative_gpa. A term GPA is
   SUM(grade_points * credit_hours) / SUM(credit_hours) over passed and failed courses.
 - "This term" is the term where terms.is_current is true; "next term" is the one after it.
@@ -78,13 +79,29 @@ def load_examples(path: Path, k: int = 10) -> str:
     return "\n".join(f"Q: {r['question']}\nSQL: {r['reference_sql']}" for r in picked)
 
 
+def with_course_list(schema: str) -> str:
+    """Add every course's code and names to the schema, for Groq only. Without it, the
+    generator invents course names ("Database Systems") that the institute doesn't have.
+    The model being trained never sees this list; it reads the plain schema."""
+    import psycopg
+
+    from sqlibrarian.config import get_settings
+
+    with psycopg.connect(get_settings().records_db_url) as conn:
+        rows = conn.execute(
+            "SELECT course_code, title_en, title_ar FROM courses ORDER BY course_code"
+        ).fetchall()
+    lines = "\n".join(f"{code} | {en} | {ar}" for code, en, ar in rows)
+    return f"{schema}\nCourses (code | title_en | title_ar), use exactly these names:\n{lines}\n"
+
+
 def main() -> None:
     load_dotenv()
     p = argparse.ArgumentParser()
     p.add_argument("--schema", type=Path, default=Path("data/eval/schema.txt"))
     p.add_argument("--examples", type=Path, default=Path("data/eval/dev_questions.jsonl"))
     p.add_argument("--out", type=Path, default=Path("data/training/raw_generated.jsonl"))
-    p.add_argument("--max-calls", type=int, default=38)  # stays under 200K tokens/day
+    p.add_argument("--max-calls", type=int, default=34)  # ~5,500 tokens each: under 200K/day
     p.add_argument("--pairs-per-call", type=int, default=20)
     p.add_argument("--wait", type=float, default=45.0)  # seconds between calls (8K tokens/min)
     p.add_argument("--model", default="openai/gpt-oss-120b")
@@ -92,7 +109,7 @@ def main() -> None:
     args = p.parse_args()
 
     if args.dry_run:
-        schema = args.schema.read_text(encoding="utf-8")
+        schema = with_course_list(args.schema.read_text(encoding="utf-8"))
         qtype, difficulty, language = QUESTION_TYPES[0], DIFFICULTIES[0], LANGUAGES[0]
         prompt = PROMPT.format(
             schema=schema, examples=load_examples(args.examples), n=args.pairs_per_call,
@@ -103,7 +120,7 @@ def main() -> None:
         return
 
     client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ["GROQ_API_KEY"])
-    schema = args.schema.read_text(encoding="utf-8")
+    schema = with_course_list(args.schema.read_text(encoding="utf-8"))
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
     # Continue the rotation from where yesterday's run stopped.
