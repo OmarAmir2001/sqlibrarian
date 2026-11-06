@@ -4,10 +4,8 @@
     uv run python -m sqlibrarian.evaluation.check_questions data/eval/dev_questions.jsonl \
         --as-student 238834
 
---as-student shows what one student would see. Until row-level security exists (P2),
-it is imitated with temporary views: in this session, `students`, `enrollments`,
-`plans` and `plan_courses` are replaced by copies holding only that student's rows
-(PostgreSQL looks in the temporary schema first). Nothing is saved: the whole run
+--as-student shows what one student would see (imitated with temporary views until
+row-level security exists; see evaluation/db.py). Nothing is saved: the whole run
 is rolled back.
 
 Exit code 1 if any query fails, so it can run in CI.
@@ -20,14 +18,7 @@ from pathlib import Path
 import psycopg
 
 from sqlibrarian.config import get_settings
-
-PERSONAL_VIEWS = [
-    "CREATE TEMP VIEW students AS SELECT * FROM public.students WHERE student_id = {sid}",
-    "CREATE TEMP VIEW enrollments AS SELECT * FROM public.enrollments WHERE student_id = {sid}",
-    "CREATE TEMP VIEW plans AS SELECT * FROM public.plans WHERE student_id = {sid}",
-    "CREATE TEMP VIEW plan_courses AS SELECT pc.* FROM public.plan_courses pc"
-    " JOIN public.plans p ON p.plan_id = pc.plan_id WHERE p.student_id = {sid}",
-]
+from sqlibrarian.evaluation.db import act_as_student
 
 
 def short(rows: list[tuple], width: int = 90) -> str:
@@ -48,8 +39,7 @@ def main() -> None:
     with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
         cur.execute("SET LOCAL statement_timeout = '3s'")
         if args.as_student is not None:
-            for stmt in PERSONAL_VIEWS:
-                cur.execute(stmt.format(sid=int(args.as_student)))
+            act_as_student(cur, args.as_student)
         for item in items:
             label = f"{item['id']}  {item['question'][:45]:45s}"
             cur.execute("SAVEPOINT q")

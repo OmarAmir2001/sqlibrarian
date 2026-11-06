@@ -24,3 +24,6 @@ data/training/*
 *.db
 mlruns/
 mlartifacts/
+
+# Model outputs from evaluation runs (download from Kaggle, score locally)
+data/eval/predictions/
