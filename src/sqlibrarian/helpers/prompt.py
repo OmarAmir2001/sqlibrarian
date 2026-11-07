@@ -54,6 +54,20 @@ def build_messages(
     return messages
 
 
+def build_retry_messages(messages: list[dict], sql: str, error: str) -> list[dict]:
+    """The one retry (SDD): the first prompt, the model's query, and the database error.
+    Only PostgreSQL's message goes back to the model, never any row."""
+    return [
+        *messages,
+        {"role": "assistant", "content": sql},
+        {
+            "role": "user",
+            "content": f"The query failed with this PostgreSQL error:\n{error}\n"
+            "Write a corrected query. Return only the SQL.",
+        },
+    ]
+
+
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _FENCE = re.compile(r"```(?:sql|postgresql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 _START = re.compile(r"\b(SELECT|WITH)\b", re.IGNORECASE)

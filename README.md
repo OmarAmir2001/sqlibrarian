@@ -38,3 +38,30 @@ docker compose --env-file .env -f infra/docker-compose.yml ps     # both should 
 
 The `.sql` files in `db/records/` and `db/app/` run only when a volume is first created.
 After changing one, rebuild with `down -v` (this deletes the data), then `up -d`.
+
+### Run the assistant locally
+
+```bash
+# 1. Databases (a new volume also runs db/records/03_security.sh: roles + row-level security)
+docker compose --env-file .env -f infra/docker-compose.yml up -d
+uv run python db/seed.py            # fake students, grades, plans
+uv run python db/seed_users.py      # logins: student id / ta1..ta10, password = DEMO_PASSWORD
+
+# 2. A model server with an OpenAI-compatible API (llama.cpp on CPU; ~1.2 GB RAM for 1.5B Q4)
+llama-server -hf Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M --port 8080     # base model
+# after training: llama-server -hf <your-hf-user>/sqlibrarian-sft-run1-gguf --port 8080
+
+# 3. The API and the student UI
+uv run uvicorn sqlibrarian.api.main:app --port 8000
+uv run --extra ui python -m sqlibrarian.ui.app                                 # http://localhost:7860
+```
+
+On a GPU, serve with vLLM instead (`vllm serve <model> --served-model-name sqlibrarian
+--enable-prefix-caching`) and set `MODEL_SERVER_URL` in `.env`; the API code is the same.
+
+### How a question is answered
+
+question → `build_messages` (schema + question, never an id) → model → `extract_sql` →
+**guard** (one SELECT, allowed tables and functions, `LIMIT 200`) → run as `sqlib_reader` with
+`app.student_id` set → **row-level security** filters → one retry on a database error →
+bilingual template answer → `query_log` (no rows stored).

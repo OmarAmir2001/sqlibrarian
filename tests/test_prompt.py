@@ -38,3 +38,13 @@ def test_examples_go_between_schema_and_question():
 )
 def test_extract_sql(reply, sql):
     assert extract_sql(reply) == sql
+
+
+def test_retry_messages_add_the_query_and_the_error():
+    from sqlibrarian.helpers.prompt import build_retry_messages
+
+    first = build_messages("TABLE t (a INT)", "my gpa?")
+    retry = build_retry_messages(first, "SELECT nope FROM t", 'column "nope" does not exist')
+    assert retry[: len(first)] == first
+    assert retry[-2] == {"role": "assistant", "content": "SELECT nope FROM t"}
+    assert 'column "nope" does not exist' in retry[-1]["content"]

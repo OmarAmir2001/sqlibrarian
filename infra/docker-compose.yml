@@ -20,6 +20,10 @@ services:
       POSTGRES_USER: ${RECORDS_DB_USER:?set RECORDS_DB_USER in .env}
       POSTGRES_PASSWORD: ${RECORDS_DB_PASSWORD:?set RECORDS_DB_PASSWORD in .env}
       POSTGRES_DB: ${RECORDS_DB_NAME:-records_db}
+      # Passwords of the three API roles, read by db/records/03_security.sh
+      SQLIB_READER_PASSWORD: ${SQLIB_READER_PASSWORD:?set SQLIB_READER_PASSWORD in .env}
+      SQLIB_APPROVER_PASSWORD: ${SQLIB_APPROVER_PASSWORD:?set SQLIB_APPROVER_PASSWORD in .env}
+      SQLIB_CHECKER_PASSWORD: ${SQLIB_CHECKER_PASSWORD:?set SQLIB_CHECKER_PASSWORD in .env}
     ports:
       - "5433:5432"
     volumes:
