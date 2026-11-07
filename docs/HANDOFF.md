@@ -33,6 +33,52 @@ After merging, change `BRANCH = ...` in the notebooks' settings cell to `"master
 
 ## 3. Your next steps, in order
 
+### 3.0 The loop you repeat on your own (added 2026-11-07, after SFT run 1)
+
+SFT run 1 scored **16%** on the dev set (baseline 4%). Its main weakness is the data: the first
+Groq day covered only 4 of the 12 question types, so the model reuses those 4 patterns for
+everything (details in the tracker). Every round below adds data, retrains and measures. All free.
+
+**Each day (laptop, ~30 min, unattended):**
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml up -d     # databases on
+uv run python -m sqlibrarian.training.generate_pairs                 # stops at the free daily limit
+uv run python -m sqlibrarian.training.validate_pairs                 # keeps only pairs that run and return rows
+```
+`validate_pairs` prints how many pairs were kept; note it in the tracker.
+
+**When you want a new model (any evening):**
+1. Upload the pairs: `uv run --with datasets python -m sqlibrarian.training.format push-own`
+   (ends with `format.own_pushed examples=<n>`).
+2. Kaggle: open the SFT notebook (or File → Import Notebook from `notebooks/sqlibrarian-sft.ipynb`),
+   and in cell A set `BRANCH = "p3-sft"`, `CONFIG = "configs/sft_run2.yaml"`, `RUN_NAME = "sft-run2"`.
+   For later rounds copy the config to `sft_run3.yaml`, change `run_name`, commit and push it first.
+3. Run cells A–D, start E, wait for the bar to move past a few steps (`3/400`), stop it, then
+   **Save Version → Save & Run All (Commit)**. 2–3 hours.
+4. Download `<run>_predictions.zip` (Output tab) and score:
+   ```bash
+   unzip -o sft_predictions.zip -d /tmp/preds && cp /tmp/preds/predictions/* data/eval/predictions/
+   uv run --with mlflow-skinny python -m sqlibrarian.evaluation.score \
+       data/eval/predictions/sft-run2.jsonl data/eval/predictions/sft-run1.jsonl --mlflow
+   ```
+   The table compares the two runs (all / en / ar / mixed). Write the numbers in the tracker.
+5. See what it still gets wrong: open `data/eval/predictions/sft-run2.scores.jsonl`; every line
+   has `status` (correct / wrong / error / invalid) and `detail`. Look for a pattern (one table,
+   one kind of question) and add a rule for it to `PROMPT` in `training/generate_pairs.py`,
+   the same way the 2026-11-07 rules were added.
+
+**Around 1,500 pairs:** run the Egyptian / mixed rewrites once (`rewrite_arabic.py`; it uses the
+same Groq quota, so on a day without `generate_pairs`), then `validate_pairs` and `push-own`.
+Mixed questions are the weakest group (6.7%).
+
+**What the notebooks already handle** (fixed during run 1, nothing to do): one GPU only
+(`CUDA_VISIBLE_DEVICES=0`), Kaggle's old `torchao` removed, and the notebook stops at the
+first failed step. If a new error appears: read the last ~20 lines; it is usually one library
+version, fixed with one install or uninstall line in cell C.
+
+**GRPO** (3.4) is worth it once SFT stops improving between rounds: it polishes what SFT learned
+but cannot teach question types the data doesn't have.
+
 ### 3.1 One-time setup on the laptop
 
 1. Add a Hugging Face **write** token to `.env`: `HF_TOKEN=hf_...`.
