@@ -18,11 +18,21 @@ import json
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import psycopg
 
-from sqlibrarian.config import get_settings
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import (
+    Difficulty,
+    EnrollmentStatus,
+    PlanRule,
+    PlanStatus,
+    Program,
+    TermType,
+)
+from sqlibrarian.helpers.log import configure_logging, get_logger
+
+log = get_logger(__name__)
 
 SEED = 42
 N_STUDENTS = 500
@@ -46,7 +56,7 @@ HARD = {
 }  # fmt: skip
 EASY_PREFIXES = ("H ",)
 EASY = {"CS 101", "IS 105", "IS 207", "CS 104", "CS 413", "CS 498", "CS 499", "IS 498", "IS 499"}
-MEAN_TOTAL = {"easy": 75, "medium": 68, "hard": 60}
+MEAN_TOTAL = {Difficulty.EASY: 75, Difficulty.MEDIUM: 68, Difficulty.HARD: 60}
 SPREAD = 12
 
 # Bylaws article 20: a course retaken after failing is capped at B+ (1st retake),
@@ -138,12 +148,12 @@ class Course:
     prereqs: set[str] = field(default_factory=set)
 
     @property
-    def difficulty(self) -> str:
+    def difficulty(self) -> Difficulty:
         if self.code in HARD:
-            return "hard"
+            return Difficulty.HARD
         if self.code in EASY or self.code.startswith(EASY_PREFIXES):
-            return "easy"
-        return "medium"
+            return Difficulty.EASY
+        return Difficulty.MEDIUM
 
 
 def load_catalog(cur: psycopg.Cursor) -> tuple[dict[str, Course], list, list]:
@@ -158,7 +168,8 @@ def load_catalog(cur: psycopg.Cursor) -> tuple[dict[str, Course], list, list]:
     cur.execute("SELECT min_total, letter_grade, points FROM grading_scale ORDER BY min_total DESC")
     scale = [(float(m), letter, float(p)) for m, letter, p in cur.fetchall()]
     cur.execute(
-        "SELECT gpa_from, gpa_to, max_credit_hours FROM credit_rules WHERE term_type = 'regular'"
+        "SELECT gpa_from, gpa_to, max_credit_hours FROM credit_rules WHERE term_type = %s",
+        (TermType.REGULAR,),
     )
     rules = [(float(a), float(b), h) for a, b, h in cur.fetchall()]
     return courses, scale, rules
@@ -197,7 +208,9 @@ class Student:
 
     def passed(self) -> set[str]:
         return {
-            c for c, rows in self.attempts.items() if any(r["status"] == "passed" for r in rows)
+            c
+            for c, rows in self.attempts.items()
+            if any(r["status"] == EnrollmentStatus.PASSED for r in rows)
         }
 
     def passed_hours(self, courses: dict[str, Course]) -> int:
@@ -207,7 +220,7 @@ class Student:
         """Latest graded attempt of each course counts (article 20)."""
         points = hours = 0.0
         for code, rows in self.attempts.items():
-            graded = [r for r in rows if r["status"] in ("passed", "failed")]
+            graded = [r for r in rows if r["status"] in EnrollmentStatus.graded()]
             if graded:
                 points += graded[-1]["grade_points"] * courses[code].hours
                 hours += courses[code].hours
@@ -236,7 +249,7 @@ def choose_courses(
     failed_before = {c for c, rows in s.attempts.items() if c not in done}
     candidates = []
     for c in courses.values():
-        if c.program not in (s.program, "both") or c.code in done or c.code in in_progress:
+        if c.program not in (s.program, Program.BOTH) or c.code in done or c.code in in_progress:
             continue
         if not c.prereqs <= done or c.min_passed_hours > hours_done:
             continue
@@ -265,9 +278,9 @@ def grade(s: Student, course: Course, scale: list, rng: random.Random, attempt_n
     """One finished course: marks split by the bylaws' weights (20 + 20 + 60)."""
     r = rng.random()
     if r < 0.02:
-        return {"status": "withdrawn"}
+        return {"status": EnrollmentStatus.WITHDRAWN}
     if r < 0.025:
-        return {"status": "incomplete"}
+        return {"status": EnrollmentStatus.INCOMPLETE}
     total = rng.gauss(MEAN_TOTAL[course.difficulty] + s.ability, SPREAD)
     total = round(min(100.0, max(5.0, total)), 1)
     share = total / 100
@@ -278,7 +291,7 @@ def grade(s: Student, course: Course, scale: list, rng: random.Random, attempt_n
 
     retakes = attempt_no - 1  # earlier attempts of this course
     failed_before = retakes > 0 and any(
-        r["status"] == "failed" for r in s.attempts.get(course.code, [])
+        r["status"] == EnrollmentStatus.FAILED for r in s.attempts.get(course.code, [])
     )
     kept = total
     if failed_before:
@@ -287,7 +300,7 @@ def grade(s: Student, course: Course, scale: list, rng: random.Random, attempt_n
     return {
         "midterm": midterm, "coursework": coursework, "final": final, "total": kept,
         "letter_grade": letter, "grade_points": points,
-        "status": "passed" if letter != "F" else "failed",
+        "status": EnrollmentStatus.PASSED if letter != "F" else EnrollmentStatus.FAILED,
     }  # fmt: skip
 
 
@@ -310,7 +323,7 @@ def make_students(rng: random.Random) -> list[Student]:
         students.append(
             Student(
                 student_id=sid, name_ar=name_ar, name_en=name_en,
-                program="IS" if rng.random() < IS_SHARE else "CS",
+                program=Program.IS if rng.random() < IS_SHARE else Program.CS,
                 level=level, entry_term=entry_term, lagging=lagging,
                 ability=rng.gauss(-4 if lagging else 0, 7),
                 advisor=1 + i % N_TAS,
@@ -343,9 +356,9 @@ def make_plan(s, current, courses, rules, rng) -> tuple[list[str], str | None, s
         return picked, None, ""
     limit = credit_limit(s.gpa, rules)
     hours = sum(courses[c].hours for c in picked)
-    in_program = [c for c in courses.values() if c.program in (s.program, "both")]
-    kind = rng.choice(["missing_prerequisite", "over_credit_limit", "already_passed"])
-    if kind == "missing_prerequisite":
+    in_program = [c for c in courses.values() if c.program in (s.program, Program.BOTH)]
+    kind = rng.choice(list(PlanRule))
+    if kind is PlanRule.MISSING_PREREQUISITE:
         options = [
             c for c in in_program if c.code not in done | set(picked) and not c.prereqs <= done
         ]
@@ -353,7 +366,7 @@ def make_plan(s, current, courses, rules, rng) -> tuple[list[str], str | None, s
             c = rng.choice(options)
             missing = sorted(c.prereqs - done)
             return picked + [c.code], kind, f"{c.code} needs {', '.join(missing)}"
-    if kind == "already_passed" and s.passed():
+    if kind is PlanRule.ALREADY_PASSED and s.passed():
         c = rng.choice(sorted(s.passed()))
         return picked + [c], kind, f"{c} was already passed"
     # over the limit: add eligible-looking courses until hours exceed the GPA limit
@@ -367,7 +380,11 @@ def make_plan(s, current, courses, rules, rng) -> tuple[list[str], str | None, s
         hours += c.hours
     if hours > limit:
         gpa = s.gpa if s.gpa is not None else "none yet (new student)"
-        return picked, "over_credit_limit", f"{hours} credit hours, limit {limit} for GPA {gpa}"
+        return (
+            picked,
+            PlanRule.OVER_CREDIT_LIMIT,
+            f"{hours} credit hours, limit {limit} for GPA {gpa}",
+        )
     return picked, None, ""
 
 
@@ -375,9 +392,10 @@ def make_plan(s, current, courses, rules, rng) -> tuple[list[str], str | None, s
 
 
 def main() -> None:
+    configure_logging()
     rng = random.Random(SEED)
     expected = []
-    with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
+    with psycopg.connect(get_settings().records_dsn) as conn, conn.cursor() as cur:
         courses, scale, rules = load_catalog(cur)
         cur.execute("TRUNCATE plan_courses, plans, enrollments, students, tas RESTART IDENTITY")
 
@@ -392,8 +410,8 @@ def main() -> None:
         for s in students:
             rows, current = simulate(s, courses, scale, rules, rng)
             enrollment_rows += rows
-            enrollment_rows += [(s.student_id, c, CURRENT_TERM, {"status": "in_progress"})
-                                for c in current]  # fmt: skip
+            now = {"status": EnrollmentStatus.IN_PROGRESS}
+            enrollment_rows += [(s.student_id, c, CURRENT_TERM, now) for c in current]
             if rng.random() < PLAN_SHARE:
                 picked, rule, details = make_plan(s, current, courses, rules, rng)
                 if picked:
@@ -416,11 +434,13 @@ def main() -> None:
 
         for s, picked, rule, details in plans:
             created = PLAN_TIME + timedelta(hours=rng.randint(0, 96))
-            status = "pending"
+            status = PlanStatus.PENDING
             if rule is None:
-                status = rng.choices(["pending", "approved", "rejected"], [6, 3, 1])[0]
+                status = rng.choices(list(PlanStatus), [6, 3, 1])[0]
             reviewed = (
-                (s.advisor, created + timedelta(days=1)) if status != "pending" else (None, None)
+                (s.advisor, created + timedelta(days=1))
+                if status != PlanStatus.PENDING
+                else (None, None)
             )
             cur.execute(
                 "INSERT INTO plans (student_id, term_id, created_at, status, reviewed_by,"
@@ -436,10 +456,12 @@ def main() -> None:
                 expected.append({"plan_id": plan_id, "student_id": s.student_id,
                                  "rule": rule, "details": details})  # fmt: skip
 
-    out = Path(__file__).resolve().parents[1] / "data/eval/plan_flags_expected.jsonl"
+    out = get_settings().paths.plan_flags_expected
     out.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in expected), "utf-8")
-    print(f"{len(tas)} TAs, {len(students)} students, {len(enrollment_rows)} enrollments, "
-          f"{len(plans)} plans ({len(expected)} broken on purpose -> {out.name})")  # fmt: skip
+    log.info(
+        "seed.done", tas=len(tas), students=len(students), enrollments=len(enrollment_rows),
+        plans=len(plans), broken_plans=len(expected), expected_flags=str(out),
+    )  # fmt: skip
 
 
 if __name__ == "__main__":

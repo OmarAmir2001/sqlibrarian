@@ -2,7 +2,7 @@
 
 Each example is measured the way the model will see it: the chat messages are
 rendered with the model's own chat template and counted with its tokenizer.
-Examples over --max-tokens (default 2,048) are dropped. Most Spider examples are
+Examples over --max-tokens (settings.max_train_tokens, 2,048) are dropped. Most Spider examples are
 far shorter; the long ones are big schemas, and cutting them off mid-schema
 would teach the model from a broken prompt.
 
@@ -20,15 +20,20 @@ from pathlib import Path
 from datasets import DatasetDict, load_from_disk
 from transformers import AutoTokenizer
 
-DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
+
+log = get_logger(__name__)
 
 
 def main() -> None:
+    configure_logging()
+    s = get_settings()
     p = argparse.ArgumentParser()
-    p.add_argument("--data", type=Path, required=True)
-    p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--model", default=DEFAULT_MODEL)
-    p.add_argument("--max-tokens", type=int, default=2048)
+    p.add_argument("--data", type=Path, default=s.paths.public)
+    p.add_argument("--out", type=Path, default=s.paths.public_filtered)
+    p.add_argument("--model", default=s.base_model, help="whose tokenizer counts the tokens")
+    p.add_argument("--max-tokens", type=int, default=s.max_train_tokens)
     args = p.parse_args()
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -49,13 +54,14 @@ def main() -> None:
         p95 = lengths[int(0.95 * (len(lengths) - 1))] if lengths else 0
         kept[split] = rows.filter(lambda ex: ex["n_tokens"] <= args.max_tokens)
         dropped = len(rows) - len(kept[split])
-        print(
-            f"{split}: {len(rows)} in, {dropped} dropped (> {args.max_tokens} tokens), "
-            f"{len(kept[split])} kept; p95 {p95}, longest {lengths[-1] if lengths else 0}"
-        )
+        log.info(
+            "length_filter.split", split=split, examples_in=len(rows), dropped=dropped,
+            kept=len(kept[split]), max_tokens=args.max_tokens, p95_tokens=p95,
+            longest_tokens=lengths[-1] if lengths else 0,
+        )  # fmt: skip
 
     kept.save_to_disk(str(args.out))
-    print(f"saved to {args.out}")
+    log.info("length_filter.saved", out=str(args.out))
 
 
 if __name__ == "__main__":

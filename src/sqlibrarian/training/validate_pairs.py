@@ -3,39 +3,42 @@ then remove duplicates.
 
 Checks, in order (each rejection is counted so you can see where pairs die):
   1. the SQL is exactly one SELECT
-  2. it doesn't hard-code a student_id
-  3. it runs on records_db within 3 seconds, read-only
+  2. every course it names exists, and it doesn't filter by student
+  3. it runs on records_db within the statement timeout, read-only
   4. it returns rows (empty is allowed only for "not recorded yet" questions)
   5. its normalized form hasn't been seen before
 
-Run (laptop, records_db up, RECORDS_DB_URL in .env, e.g.
-postgresql://user:pass@localhost:5433/records_db):
+Run (laptop, records_db up, RECORDS_DB_URL in .env):
     uv run python -m sqlibrarian.training.validate_pairs
 """
 
 import argparse
 import json
-import os
 from collections import Counter
 from pathlib import Path
 
 import psycopg
-from dotenv import load_dotenv
 
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import Lang
+from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.training.sql_utils import (
-    filters_on_student_literal,
+    course_names_used,
+    filters_by_student,
     is_single_select,
     normalize_sql,
 )
 
+log = get_logger(__name__)
 
-def run_readonly(conn: psycopg.Connection, sql: str) -> int | None:
-    """Run the query in a read-only transaction with a 3 s limit.
+
+def run_readonly(conn: psycopg.Connection, sql: str, timeout: str) -> int | None:
+    """Run the query in a read-only transaction with a time limit.
     Returns the number of rows, or None if it failed. Nothing is ever saved."""
     with conn.cursor() as cur:
         try:
             cur.execute("BEGIN READ ONLY")
-            cur.execute("SET LOCAL statement_timeout = '3s'")
+            cur.execute("SELECT set_config('statement_timeout', %s, true)", (timeout,))
             cur.execute(sql)
             return len(cur.fetchall())
         except psycopg.Error:
@@ -44,15 +47,25 @@ def run_readonly(conn: psycopg.Connection, sql: str) -> int | None:
             cur.execute("ROLLBACK")
 
 
+def batch_lang(batch: dict) -> Lang:
+    """Lines written before the "lang" field existed only have the prompt's wording."""
+    if "lang" in batch:
+        return Lang(batch["lang"])
+    return Lang.AR if batch["language"].startswith("Modern") else Lang.EN
+
+
 def main() -> None:
-    load_dotenv()
+    configure_logging()
+    s = get_settings()
     p = argparse.ArgumentParser()
-    p.add_argument("--raw", type=Path, default=Path("data/training/raw_generated.jsonl"))
-    p.add_argument("--out", type=Path, default=Path("data/training/own_pairs.jsonl"))
+    p.add_argument("--raw", type=Path, default=s.paths.raw_generated)
+    p.add_argument("--out", type=Path, default=s.paths.own_pairs)
     args = p.parse_args()
 
     kept, seen, reasons = [], set(), Counter()
-    with psycopg.connect(os.environ["RECORDS_DB_URL"], autocommit=True) as conn:
+    with psycopg.connect(s.records_dsn, autocommit=True) as conn:
+        titles = conn.execute("SELECT title_en, title_ar FROM courses").fetchall()
+        known_courses = {t for row in titles for t in row}
         for line in args.raw.read_text(encoding="utf-8").splitlines():
             batch = json.loads(line)
             for pair in batch["pairs"]:
@@ -64,10 +77,13 @@ def main() -> None:
                 if not is_single_select(sql):
                     reasons["not a single SELECT"] += 1
                     continue
-                if filters_on_student_literal(sql):
-                    reasons["hard-coded student_id"] += 1
+                if course_names_used(sql) - known_courses:
+                    reasons["unknown course name"] += 1
                     continue
-                n_rows = run_readonly(conn, sql)
+                if filters_by_student(sql):
+                    reasons["filters by student"] += 1
+                    continue
+                n_rows = run_readonly(conn, sql, s.statement_timeout)
                 if n_rows is None:
                     reasons["failed to run"] += 1
                     continue
@@ -86,7 +102,7 @@ def main() -> None:
                         "reference_sql": sql,
                         "qtype": batch["qtype"],
                         "difficulty": batch["difficulty"],
-                        "lang": "ar" if batch["language"].startswith("Modern") else "en",
+                        "lang": batch_lang(batch),
                         "rows": n_rows,
                     }
                 )
@@ -95,11 +111,14 @@ def main() -> None:
         for row in kept:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    total = len(kept) + sum(reasons.values())
-    print(f"kept {len(kept)} of {total} pairs")
-    for reason, n in reasons.most_common():
-        print(f"  dropped {n:5d}  {reason}")
-    print("by type:", Counter(r["qtype"] for r in kept).most_common())
+    log.info(
+        "validate.done", kept=len(kept), total=len(kept) + sum(reasons.values()),
+        out=str(args.out), dropped=dict(reasons.most_common()),
+    )  # fmt: skip
+    log.info(
+        "validate.by_type", **{q[:40]: n for q, n in Counter(r["qtype"] for r in kept).items()}
+    )
+    log.info("validate.by_lang", **Counter(r["lang"] for r in kept))
 
 
 if __name__ == "__main__":

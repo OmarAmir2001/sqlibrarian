@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sqlibrarian.training.sql_utils import filters_on_student_literal, is_single_select
+from sqlibrarian.training.sql_utils import filters_by_student, is_single_select
 
 EVAL = Path(__file__).resolve().parents[1] / "data/eval"
 FIELDS = {"id", "question", "lang", "difficulty", "reference_sql"}
@@ -31,7 +31,7 @@ def test_dev_set_shape():
 @pytest.mark.parametrize("q", DEV, ids=[q["id"] for q in DEV])
 def test_dev_reference_is_safe_select_for_current_student(q):
     assert is_single_select(q["reference_sql"])
-    assert not filters_on_student_literal(q["reference_sql"])
+    assert not filters_by_student(q["reference_sql"])
 
 
 def test_schema_text_exported():
