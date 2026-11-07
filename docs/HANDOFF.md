@@ -43,9 +43,11 @@ After merging, change `BRANCH = ...` in the notebooks' settings cell to `"master
    ```
 3. Publish what Kaggle needs:
    ```bash
-   uv run --extra training python -m sqlibrarian.training.format push-own   # your pairs
-   uv run --extra training python db/publish_dump.py publish                # the fake DB, for GRPO
+   uv run --with datasets python -m sqlibrarian.training.format push-own   # your pairs
+   uv run --with datasets python db/publish_dump.py publish                # the fake DB, for GRPO
    ```
+   `--with datasets` adds only the small upload library. Don't use `--extra training` here:
+   it also installs PyTorch with several GB of NVIDIA packages, which uploading doesn't need.
 
 ### 3.2 Every day until you have about 3,000 own pairs (free, about 30 minutes, unattended)
 
