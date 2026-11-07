@@ -107,10 +107,18 @@ def load_sft_data(
     original never land on different sides."""
     import random
 
-    from datasets import concatenate_datasets, load_dataset
+    from datasets import concatenate_datasets, get_dataset_config_names, load_dataset
 
     s = get_settings()
     repo = dataset_repo()
+    found = get_dataset_config_names(repo, token=s.hf_token)
+    missing = [c for c in (PUBLIC_CONFIG, OWN_CONFIG) if c not in found]
+    if missing:
+        raise RuntimeError(
+            f"{repo} has no {missing} data on the Hub (found {found}). For '{OWN_CONFIG}', run"
+            " `python -m sqlibrarian.training.format push-own` on the laptop first;"
+            f" for '{PUBLIC_CONFIG}', run the training-data notebook."
+        )
     public = load_dataset(repo, PUBLIC_CONFIG, split="train", token=s.hf_token)
     public = public.shuffle(seed=seed).select(range(min(public_max, len(public))))
     public = public.map(
