@@ -104,6 +104,26 @@ def students_for(
     return students
 
 
+def judge(
+    cur: psycopg.Cursor, sql: str, reference_sql: str, students: list[int]
+) -> tuple[ScoreStatus, str]:
+    """Is one predicted query right? The single definition used by evaluation (here) and
+    by the GRPO reward (training/rewards.py)."""
+    if not sql or not is_single_select(sql):
+        return ScoreStatus.INVALID, "not a single SELECT"
+    for sid in students:
+        act_as_student(cur, sid)
+        expected, ref_error = run(cur, reference_sql)
+        if ref_error:
+            raise SystemExit(f"the REFERENCE query fails: {ref_error}\n{reference_sql}")
+        got, error = run(cur, sql)
+        if error:
+            return ScoreStatus.ERROR, error
+        if got != expected:
+            return ScoreStatus.WRONG, f"student {sid}: {len(got)} rows, expected {len(expected)}"
+    return ScoreStatus.CORRECT, ""
+
+
 def score_file(
     cur: psycopg.Cursor,
     predictions: Path,
@@ -115,29 +135,12 @@ def score_file(
     results = []
     for p in preds:
         q = questions[p["id"]]
-        result = {"id": p["id"], "lang": q["lang"], "difficulty": q["difficulty"], "sql": p["sql"]}
-        if not p["sql"] or not is_single_select(p["sql"]):
-            results.append(
-                {**result, "status": ScoreStatus.INVALID, "detail": "not a single SELECT"}
-            )
-            continue
-        status, detail = ScoreStatus.CORRECT, ""
-        for sid in students_for(cur, q, sample, cache):
-            act_as_student(cur, sid)
-            expected, ref_error = run(cur, q["reference_sql"])
-            if ref_error:
-                raise SystemExit(f"{q['id']}: the REFERENCE query fails: {ref_error}")
-            got, error = run(cur, p["sql"])
-            if error:
-                status, detail = ScoreStatus.ERROR, error
-                break
-            if got != expected:
-                status, detail = (
-                    ScoreStatus.WRONG,
-                    f"student {sid}: {len(got)} rows, expected {len(expected)}",
-                )
-                break
-        results.append({**result, "status": status, "detail": detail})
+        students = students_for(cur, q, sample, cache)
+        status, detail = judge(cur, p["sql"], q["reference_sql"], students)
+        results.append(
+            {"id": p["id"], "lang": q["lang"], "difficulty": q["difficulty"], "sql": p["sql"],
+             "status": status, "detail": detail}
+        )  # fmt: skip
     return results
 
 
