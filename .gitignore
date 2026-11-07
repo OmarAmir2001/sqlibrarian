@@ -27,3 +27,6 @@ mlartifacts/
 
 # Model outputs from evaluation runs (download from Kaggle, score locally)
 data/eval/predictions/
+
+# Training outputs (adapters, merged models, GGUF): pushed to the HF Hub, not git
+runs/

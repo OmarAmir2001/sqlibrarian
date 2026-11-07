@@ -45,6 +45,8 @@ class Paths:
         self.review_sheet = self.training / "review_sample.csv"
         self.own_pairs_reviewed = self.training / "own_pairs_reviewed.jsonl"
         self.own_pairs_clean = self.training / "own_pairs_clean.jsonl"
+        self.configs = root / "configs"  # one YAML file per training run
+        self.runs = root / "runs"  # training outputs (git-ignored)
 
 
 class Settings(BaseSettings):
@@ -57,6 +59,7 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str | None = None
     mlflow_tracking_username: str | None = None
     mlflow_tracking_password: str | None = None
+    hf_token: str | None = None  # write token: datasets and models on the Hugging Face Hub
 
     # --- models -----------------------------------------------------------------------
     base_model: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"  # chosen at the P0 gate
@@ -72,6 +75,14 @@ class Settings(BaseSettings):
     decontamination_threshold: float = Field(0.9, gt=0, le=1)  # cosine similarity
     mlflow_baseline_experiment: str = "sqlibrarian-baseline"
     test_set_per_lang: int = Field(100, gt=0)  # en / ar / mixed questions in the test set
+
+    # --- Hugging Face Hub (private repos, under the token's user) --------------------
+    hf_dataset_name: str = "sqlibrarian-training-data"  # configs: public, own
+    hf_model_prefix: str = "sqlibrarian"  # models: <prefix>-<run name>
+
+    # --- training ---------------------------------------------------------------------
+    mlflow_sft_experiment: str = "sqlibrarian-sft"
+    mlflow_grpo_experiment: str = "sqlibrarian-grpo"
 
     # --- logging ----------------------------------------------------------------------
     log_level: str = "INFO"

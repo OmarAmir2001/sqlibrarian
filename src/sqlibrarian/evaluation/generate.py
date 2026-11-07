@@ -42,6 +42,7 @@ def main() -> None:
     p.add_argument("--schema", type=Path, default=s.paths.schema)
     p.add_argument("--out-dir", type=Path, default=s.paths.predictions)
     p.add_argument("--few-shot", action="store_true", help="add the 3 FEW_SHOT examples")
+    p.add_argument("--run-name", help="name for the output files (default: from the model)")
     p.add_argument("--max-new-tokens", type=int, default=256)
     p.add_argument("--limit", type=int, help="only the first N questions (quick test)")
     args = p.parse_args()
@@ -74,7 +75,7 @@ def main() -> None:
     if cuda:
         torch.cuda.reset_peak_memory_stats()
 
-    name = run_name(args.model, args.few_shot)
+    name = args.run_name or run_name(args.model, args.few_shot)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     out_path = args.out_dir / f"{name}.jsonl"
     seconds = []
