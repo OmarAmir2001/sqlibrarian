@@ -59,9 +59,18 @@ Rules:
 - Use only the tables and columns above, each on its own table (credit_hours is in courses).
 - Find a course by its name (courses.title_en or title_ar), never by guessing its code.
   Use only courses from the list, with their names written exactly as in the list.
-- Cumulative GPA is students.cumulative_gpa. A term GPA is
-  SUM(grade_points * credit_hours) / SUM(credit_hours) over passed and failed courses.
-- "This term" is the term where terms.is_current is true; "next term" is the one after it.
+- "My GPA" or "cumulative GPA" is ALWAYS just: SELECT cumulative_gpa FROM students.
+  Never compute it. Only a GPA for one term (a named term, the last term) is computed:
+  SUM(grade_points * credit_hours) / SUM(credit_hours) over that term's passed and failed courses.
+- Enrollment status: 'passed' and 'failed' are finished courses; this term's courses are
+  'in_progress' (no grade yet). "This term" means terms.is_current is true AND
+  status = 'in_progress'; "next term" is the one after it. Only filter
+  status IN ('passed', 'failed') when the question is about finished courses.
+- Select every column the question needs: "my grade" means letter_grade and total.
+  A student may take a course more than once, so use DISTINCT when listing courses.
+- Arabic questions select the Arabic names (title_ar); English questions select title_en.
+- Advisor: students.advisor_ta_id joined to tas. Credit limit: credit_rules by
+  students.cumulative_gpa (21 hours when it is NULL). Plans: plans joined to plan_courses.
 - Write questions the way real students write: short, informal, sometimes with typos.
 
 Examples of good pairs:
