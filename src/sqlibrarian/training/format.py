@@ -7,7 +7,7 @@ build_messages(), so training sees exactly the prompt the API will send:
 TRL then computes the loss on the completion only (the SQL), not on the schema.
 
 Laptop (own pairs are made and validated there; needs HF_TOKEN in .env):
-    uv run --extra training python -m sqlibrarian.training.format push-own
+    uv run --with datasets python -m sqlibrarian.training.format push-own
 Pushes the best version of your own pairs that exists (decontaminated > reviewed >
 validated + Arabic rewrites) as the private dataset config "own".
 
