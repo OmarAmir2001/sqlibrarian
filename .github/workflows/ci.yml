@@ -1,0 +1,71 @@
+# Lint and the full test suite on every pull request and push to master.
+# The databases run in Docker with fresh random passwords, so the row-level security,
+# guard, API and plan-checker tests run against real PostgreSQL, not mocks.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --extra ui
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Make a .env with throwaway passwords
+        run: |
+          pw() { openssl rand -hex 16; }
+          R=$(pw); A=$(pw); RE=$(pw); AP=$(pw); C=$(pw)
+          cat > .env <<ENV
+          RECORDS_DB_USER=records_admin
+          RECORDS_DB_PASSWORD=$R
+          RECORDS_DB_NAME=records_db
+          RECORDS_DB_URL=postgresql://records_admin:$R@localhost:5433/records_db
+          APP_DB_USER=app_admin
+          APP_DB_PASSWORD=$A
+          APP_DB_NAME=app_db
+          APP_DB_URL=postgresql://app_admin:$A@localhost:5434/app_db
+          SQLIB_READER_PASSWORD=$RE
+          SQLIB_APPROVER_PASSWORD=$AP
+          SQLIB_CHECKER_PASSWORD=$C
+          READER_DB_URL=postgresql://sqlib_reader:$RE@localhost:5433/records_db
+          APPROVER_DB_URL=postgresql://sqlib_approver:$AP@localhost:5433/records_db
+          CHECKER_DB_URL=postgresql://sqlib_checker:$C@localhost:5433/records_db
+          JWT_SECRET=$(openssl rand -hex 32)
+          DEMO_PASSWORD=$(pw)
+          MLFLOW_TRACKING_URI=
+          ENV
+          sed -i 's/^ *//' .env
+
+      - name: Start the databases
+        run: |
+          docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
+
+      - name: Seed fake data and logins
+        run: |
+          uv run python db/seed.py
+          uv run python db/seed_users.py
+          uv run python db/export_schema.py
+          git diff --exit-code data/eval/schema.txt data/eval/plan_flags_expected.jsonl
+
+      - name: Tests
+        run: uv run pytest -q
