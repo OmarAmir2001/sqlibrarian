@@ -82,10 +82,10 @@ def test_course_names_used():
     assert course_names_used(sql) == {"Data Structures", "هياكل البيانات", "نظم التشغيل"}
 
 
-def test_generator_rotation_covers_every_type_in_12_calls():
+def test_generator_rotation_covers_every_type_in_one_cycle():
     from sqlibrarian.training.generate_pairs import QUESTION_TYPES, rotation
 
     combos = rotation()
     # LANGUAGES lists English twice on purpose (two thirds English), so 3 x 3 per type
     assert len(combos) == len(QUESTION_TYPES) * 3 * 3
-    assert {c[0] for c in combos[:12]} == set(QUESTION_TYPES)
+    assert {c[0] for c in combos[: len(QUESTION_TYPES)]} == set(QUESTION_TYPES)
