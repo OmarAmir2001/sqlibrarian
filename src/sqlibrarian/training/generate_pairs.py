@@ -28,7 +28,9 @@ log = get_logger(__name__)
 
 QUESTION_TYPES = [
     "the grade, total mark or one mark (midterm, coursework, final) in one course",
-    "cumulative GPA, or GPA in one named term or the last term",
+    "the overall (cumulative) GPA: what it is, whether it is above or below a number, "
+    "the standing it gives (SELECT cumulative_gpa FROM students, never computed)",
+    "GPA in one named term or the last term (computed from that term's grades)",
     "courses failed, courses repeated, or courses failed and not passed yet",
     "credit hours passed so far, this term, or electives passed",
     "required or elective courses still left in the student's study plan",
@@ -104,7 +106,7 @@ def with_course_list(schema: str) -> str:
 
 def rotation() -> list[tuple[str, Difficulty, Lang]]:
     """Every (question type, difficulty, language) once, with the question type changing
-    fastest: any 12 calls in a row cover all 12 types, so each day's batch is balanced."""
+    fastest: any 13 calls in a row cover all 13 types, so each day's batch is balanced."""
     return [
         (qtype, difficulty, lang)
         for difficulty, lang in itertools.product(Difficulty, LANGUAGES)
