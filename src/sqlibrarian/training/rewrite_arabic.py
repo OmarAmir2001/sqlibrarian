@@ -88,17 +88,23 @@ def main() -> None:
                 extra_body={"reasoning_effort": "low"},
             )
             rewrites = json.loads(resp.choices[0].message.content)["items"]
+            if not isinstance(rewrites, list):
+                raise TypeError("items is not a list")
         except CALL_ERRORS as e:
             log.warning("rewrite.call_failed", call=call + 1, error=type(e).__name__)
             time.sleep(args.wait * 2)
             continue
 
-        written = 0
+        written = skipped = 0
         with args.out.open("a", encoding="utf-8") as f:
             for r in rewrites:
+                if not isinstance(r, dict) or not isinstance(r.get("question"), str):
+                    skipped += 1  # the model sent a bare string or a broken item
+                    continue
                 src = by_id.get(r.get("id"))
-                if src is None or not r.get("question"):
-                    continue  # the model invented or dropped an id: skip it
+                if src is None or not r["question"].strip():
+                    skipped += 1  # the model invented or dropped an id
+                    continue
                 row = {
                     **src,
                     "id": f"{src['id']}-{style}",
@@ -108,7 +114,9 @@ def main() -> None:
                 }
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 written += 1
-        log.info("rewrite.call_done", call=call + 1, style=style, rewritten=written)
+        log.info(
+            "rewrite.call_done", call=call + 1, style=style, rewritten=written, skipped=skipped
+        )
         time.sleep(args.wait)
 
 
