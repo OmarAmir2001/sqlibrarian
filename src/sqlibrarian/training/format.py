@@ -9,7 +9,9 @@ TRL then computes the loss on the completion only (the SQL), not on the schema.
 Laptop (own pairs are made and validated there; needs HF_TOKEN in .env):
     uv run --with datasets python -m sqlibrarian.training.format push-own
 Pushes the best version of your own pairs that exists (decontaminated > reviewed >
-validated + Arabic rewrites) as the private dataset config "own".
+validated + Arabic rewrites) as the private dataset config "own". Each pair is also added
+under `schema_aug_copies` renamed schemas (training/schema_variants.py), each checked
+against records_db, so the model learns to read the schema instead of remembering names.
 
 Kaggle: sft.py calls load_sft_data(), which reads configs "public" (Spider + Ar-Spider,
 from the data notebook) and "own" and mixes them.
@@ -17,6 +19,7 @@ from the data notebook) and "own" and mixes them.
 
 import argparse
 import json
+import random
 from pathlib import Path
 
 from sqlibrarian.helpers.config import get_settings
@@ -55,7 +58,7 @@ def to_prompt_completion(messages: list[dict]) -> dict:
     return {"prompt": messages[:-1], "completion": messages[-1:]}
 
 
-def own_examples(rows: list[dict], schema: str) -> list[dict]:
+def own_examples(rows: list[dict], schema: str, variant: str = "original") -> list[dict]:
     """Own pairs -> prompt/completion examples, keeping the fields used for splitting."""
     out = []
     for r in rows:
@@ -69,8 +72,43 @@ def own_examples(rows: list[dict], schema: str) -> list[dict]:
                 "qtype": r.get("qtype", ""),
                 "reference_sql": r["reference_sql"],
                 "source": OWN_CONFIG,
+                "schema_variant": variant,
             }
         )
+    return out
+
+
+def renamed_examples(rows: list[dict], schema: str) -> list[dict]:
+    """Each pair under `schema_aug_copies` different variants. A renamed query is kept only
+    if it returns exactly the original's rows on views with the new names."""
+    import psycopg
+
+    from sqlibrarian.training.schema_variants import (
+        VariantChecker,
+        make_variants,
+        rename_schema_text,
+        rename_sql,
+    )
+
+    s = get_settings()
+    variants = make_variants(s.schema_variant_count, s.schema_variant_seed, schema)
+    texts = {v.name: rename_schema_text(schema, v) for v in variants}
+    rng = random.Random(s.schema_variant_seed)
+    out, dropped = [], 0
+    with psycopg.connect(s.records_dsn) as conn:
+        checker = VariantChecker(conn, variants, schema)
+        for r in rows:
+            for v in rng.sample(variants, min(s.schema_aug_copies, len(variants))):
+                sql = rename_sql(r["reference_sql"], v)
+                if sql is None or not checker.same_rows(r["reference_sql"], sql, v):
+                    dropped += 1
+                    continue
+                renamed = {**r, "id": f"{r['id']}@{v.name}", "reference_sql": sql,
+                           "source_id": r.get("source_id", r["id"])}  # fmt: skip
+                out += own_examples([renamed], texts[v.name], v.name)
+        conn.rollback()
+    log.info("format.renamed", variants=len(variants), copies=s.schema_aug_copies,
+             kept=len(out), dropped_changed_answer=dropped)  # fmt: skip
     return out
 
 
@@ -80,7 +118,8 @@ def push_own() -> None:
     s = get_settings()
     stage, files = own_pairs_source()
     rows = [r for f in files for r in read_jsonl(f)]
-    examples = own_examples(rows, s.paths.schema.read_text("utf-8"))
+    schema = s.paths.schema.read_text("utf-8")
+    examples = own_examples(rows, schema) + renamed_examples(rows, schema)
     fingerprint = data_fingerprint(rows)
     if stage != "decontaminated":
         log.warning(
@@ -89,7 +128,8 @@ def push_own() -> None:
         )  # fmt: skip
     repo = dataset_repo()
     message = (
-        f"own: {len(examples)} pairs ({stage}), data {fingerprint}, "
+        f"own: {len(examples)} examples from {len(rows)} pairs ({stage}, "
+        f"{s.schema_aug_copies} renamed copies each), data {fingerprint}, "
         f"prompt {PROMPT_VERSION}, code {git_commit()}"
     )
     Dataset.from_list(examples).push_to_hub(

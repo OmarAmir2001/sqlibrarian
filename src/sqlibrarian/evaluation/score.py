@@ -33,7 +33,7 @@ from pathlib import Path
 
 import psycopg
 
-from sqlibrarian.evaluation.db import act_as_student, sample_students
+from sqlibrarian.evaluation.db import act_as_student, sample_students, show_variant
 from sqlibrarian.helpers.config import get_settings
 from sqlibrarian.helpers.enums import Lang, ScoreStatus
 from sqlibrarian.helpers.log import configure_logging, get_logger
@@ -187,18 +187,29 @@ def main() -> None:
     configure_logging()
     p = argparse.ArgumentParser()
     p.add_argument("predictions", type=Path, nargs="+")
-    p.add_argument("--questions", type=Path, default=get_settings().paths.dev_questions)
+    p.add_argument("--questions", type=Path, help="default: the dev questions (of the variant)")
+    p.add_argument(
+        "--variant", choices=["heldout"],
+        help="score predictions written for the renamed held-out schema (schema_heldout.txt)",
+    )  # fmt: skip
     p.add_argument("--students", type=int, nargs="*", help="default: 5 sample students")
     p.add_argument("--mlflow", action="store_true")
     args = p.parse_args()
 
-    lines = args.questions.read_text("utf-8").splitlines()
+    paths = get_settings().paths
+    default_questions = paths.dev_questions_heldout if args.variant else paths.dev_questions
+    lines = (args.questions or default_questions).read_text("utf-8").splitlines()
     questions = {q["id"]: q for q in map(json.loads, filter(str.strip, lines))}
     table = []
     with psycopg.connect(get_settings().records_dsn) as conn, conn.cursor() as cur:
         timeout = get_settings().statement_timeout
         cur.execute("SELECT set_config('statement_timeout', %s, true)", (timeout,))
         students = args.students or sample_students(cur)
+        if args.variant:
+            from sqlibrarian.training.schema_variants import HELDOUT
+
+            act_as_student(cur, students[0])  # the per-student views come first
+            show_variant(cur, HELDOUT)
         witnesses: dict[str, list[int]] = {}
         log.info("score.start", students=students, note="+1 student for questions they can't test")
         for path in args.predictions:

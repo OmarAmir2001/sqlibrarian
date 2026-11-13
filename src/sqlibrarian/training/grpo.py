@@ -40,6 +40,9 @@ def load_prompts(cfg: GRPORunConfig):
 
     s = get_settings()
     own = load_dataset(dataset_repo(), OWN_CONFIG, split="train", token=s.hf_token)
+    if "schema_variant" in own.column_names:
+        # The reward runs queries on the real table names, so only the original schema.
+        own = own.filter(lambda ex: ex["schema_variant"] == "original")
     own = own.shuffle(seed=cfg.seed).select(range(min(cfg.prompts_max, len(own))))
     keep = {"prompt", "reference_sql"}
     return own.remove_columns([c for c in own.column_names if c not in keep])

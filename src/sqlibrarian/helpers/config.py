@@ -31,6 +31,9 @@ class Paths:
         # evaluation
         self.schema = self.eval / "schema.txt"
         self.dev_questions = self.eval / "dev_questions.jsonl"
+        # the same schema and dev questions under unseen names (training/schema_variants.py)
+        self.schema_heldout = self.eval / "schema_heldout.txt"
+        self.dev_questions_heldout = self.eval / "dev_questions_heldout.jsonl"
         self.test_questions = self.eval / "test_questions.jsonl"  # built, frozen at testset-v1
         self.test_questions_csv = self.eval / "test_questions.csv"  # written by hand
         self.attacks = self.eval / "attacks.jsonl"
@@ -76,6 +79,11 @@ class Settings(BaseSettings):
     # --- limits -----------------------------------------------------------------------
     max_train_tokens: int = Field(2048, gt=0)  # longer training examples are dropped
     statement_timeout: str = "3s"  # every query run against records_db
+    # Schema augmentation (training/schema_variants.py): each own pair is also shown under
+    # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants.
+    schema_variant_count: int = Field(16, gt=0)
+    schema_variant_seed: int = 7
+    schema_aug_copies: int = Field(2, ge=0)
     result_row_limit: int = Field(200, gt=0)  # the guard adds LIMIT 200 to every query
     groq_max_calls_per_day: int = Field(30, gt=0)  # ~6,000 tokens each, under 200K/day
     groq_wait_seconds: float = Field(45.0, ge=0)  # between calls, under 8K tokens/minute

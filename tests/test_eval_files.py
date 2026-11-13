@@ -40,3 +40,18 @@ def test_schema_text_lists_exactly_the_allowed_tables():
     """The model is shown every table the guard lets through, and nothing else."""
     text = (EVAL / "schema.txt").read_text("utf-8")
     assert set(re.findall(r"^TABLE (\w+):", text, re.M)) == ALLOWED_TABLES
+
+
+def test_heldout_files_match_the_current_schema_and_dev_set():
+    """Re-run `python -m sqlibrarian.training.schema_variants export-heldout` after changing
+    the schema or the dev questions."""
+    from sqlibrarian.training.schema_variants import HELDOUT, rename_schema_text, rename_sql
+
+    schema = (EVAL / "schema.txt").read_text("utf-8")
+    assert (EVAL / "schema_heldout.txt").read_text("utf-8") == rename_schema_text(schema, HELDOUT)
+    lines = (EVAL / "dev_questions_heldout.jsonl").read_text("utf-8").splitlines()
+    heldout = [json.loads(x) for x in lines]
+    assert [q["id"] for q in heldout] == [q["id"] for q in DEV]
+    assert [q["reference_sql"] for q in heldout] == [
+        rename_sql(q["reference_sql"], HELDOUT) for q in DEV
+    ]

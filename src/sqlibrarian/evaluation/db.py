@@ -52,3 +52,15 @@ def act_as_student(cur: psycopg.Cursor, student_id: int) -> None:
         for stmt in _VIEWS:
             cur.execute(stmt)
     cur.execute("SELECT set_config('eval.student_id', %s, true)", (str(int(student_id)),))
+
+
+def show_variant(cur: psycopg.Cursor, variant) -> None:
+    """Also show the database under a renamed variant's names (training/schema_variants.py),
+    as temporary views over the per-student views, so switching student still works.
+    Call after act_as_student()."""
+    from sqlibrarian.helpers.config import get_settings
+    from sqlibrarian.training.schema_variants import parse_schema, view_ddl
+
+    tables = parse_schema(get_settings().paths.schema.read_text("utf-8"))
+    for stmt in view_ddl(variant, tables, schema=None):
+        cur.execute(stmt)
