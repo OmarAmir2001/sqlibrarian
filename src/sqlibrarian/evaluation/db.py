@@ -1,9 +1,10 @@
 """Database helpers shared by the evaluation scripts.
 
 Until row-level security exists (P2), "what one student sees" is imitated with
-temporary views: in the current session, `students`, `enrollments`, `plans` and
-`plan_courses` are replaced by views that keep only the rows of the student named in
-the setting `eval.student_id` (PostgreSQL looks in the temporary schema first).
+temporary views: in the current session, `students`, `enrollments`, `plans`,
+`plan_courses`, `excuses` and `improvement_plans` are replaced by views that keep only
+the rows of the student named in the setting `eval.student_id` (PostgreSQL looks in the
+temporary schema first).
 The views are created once; switching student only changes the setting, the same
 way the API will set `app.student_id` for row-level security. Callers roll back
 afterwards, so nothing is saved.
@@ -16,6 +17,9 @@ _VIEWS = [
     f"CREATE TEMP VIEW students AS SELECT * FROM public.students WHERE student_id = {_SID}",
     f"CREATE TEMP VIEW enrollments AS SELECT * FROM public.enrollments WHERE student_id = {_SID}",
     f"CREATE TEMP VIEW plans AS SELECT * FROM public.plans WHERE student_id = {_SID}",
+    f"CREATE TEMP VIEW excuses AS SELECT * FROM public.excuses WHERE student_id = {_SID}",
+    "CREATE TEMP VIEW improvement_plans AS SELECT * FROM public.improvement_plans"
+    f" WHERE student_id = {_SID}",
     "CREATE TEMP VIEW plan_courses AS SELECT pc.* FROM public.plan_courses pc"
     f" JOIN public.plans p ON p.plan_id = pc.plan_id WHERE p.student_id = {_SID}",
 ]
@@ -48,3 +52,15 @@ def act_as_student(cur: psycopg.Cursor, student_id: int) -> None:
         for stmt in _VIEWS:
             cur.execute(stmt)
     cur.execute("SELECT set_config('eval.student_id', %s, true)", (str(int(student_id)),))
+
+
+def show_variant(cur: psycopg.Cursor, variant) -> None:
+    """Also show the database under a renamed variant's names (training/schema_variants.py),
+    as temporary views over the per-student views, so switching student still works.
+    Call after act_as_student()."""
+    from sqlibrarian.helpers.config import get_settings
+    from sqlibrarian.training.schema_variants import parse_schema, view_ddl
+
+    tables = parse_schema(get_settings().paths.schema.read_text("utf-8"))
+    for stmt in view_ddl(variant, tables, schema=None):
+        cur.execute(stmt)

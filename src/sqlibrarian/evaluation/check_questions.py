@@ -17,8 +17,11 @@ from pathlib import Path
 
 import psycopg
 
-from sqlibrarian.config import get_settings
 from sqlibrarian.evaluation.db import act_as_student
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
+
+log = get_logger(__name__)
 
 
 def short(rows: list[tuple], width: int = 90) -> str:
@@ -29,17 +32,20 @@ def short(rows: list[tuple], width: int = 90) -> str:
 
 
 def main() -> None:
+    configure_logging()
+    s = get_settings()
     p = argparse.ArgumentParser()
-    p.add_argument("questions", type=Path)
+    p.add_argument("questions", type=Path, nargs="?", default=s.paths.dev_questions)
     p.add_argument("--as-student", type=int, help="show results as this student would see them")
     args = p.parse_args()
 
     items = [json.loads(x) for x in args.questions.read_text("utf-8").splitlines() if x.strip()]
     failures = 0
-    with psycopg.connect(get_settings().records_db_url) as conn, conn.cursor() as cur:
-        cur.execute("SET LOCAL statement_timeout = '3s'")
+    with psycopg.connect(s.records_dsn) as conn, conn.cursor() as cur:
+        cur.execute("SELECT set_config('statement_timeout', %s, true)", (s.statement_timeout,))
         if args.as_student is not None:
             act_as_student(cur, args.as_student)
+        # One line per question is this command's output (stdout), not a log line.
         for item in items:
             label = f"{item['id']}  {item['question'][:45]:45s}"
             cur.execute("SAVEPOINT q")
@@ -53,7 +59,7 @@ def main() -> None:
             cur.execute("ROLLBACK TO SAVEPOINT q")
         conn.rollback()
 
-    print(f"\n{len(items)} queries, {failures} failed")
+    log.info("check.done", file=str(args.questions), queries=len(items), failed=failures)
     raise SystemExit(1 if failures else 0)
 
 

@@ -1,0 +1,66 @@
+-- Row-level security and the three database roles (SDD 7.3).
+--
+-- Run by 03_security.sh, which passes the passwords from .env as psql variables:
+--   :'reader_password'  :'approver_password'  :'checker_password'
+-- The file is named .psql, not .sql, so the Postgres image doesn't run it on its own.
+--
+-- How access works: each API request opens a transaction as sqlib_reader and sets
+--   SELECT set_config('app.student_id', '<id from the login token>', true)   (or app.ta_id)
+-- The policies below compare every personal row with that setting. With nothing set, a
+-- request sees no personal rows at all: safe by default. The roles are not table owners
+-- and have no BYPASSRLS, so the policies always apply to them.
+
+-- The current student / TA, or NULL. current_setting(..., true) returns NULL when the
+-- setting was never set, and '' after a transaction that set it locally has ended.
+CREATE FUNCTION app_student_id() RETURNS integer LANGUAGE sql STABLE AS
+$$ SELECT nullif(current_setting('app.student_id', true), '')::integer $$;
+CREATE FUNCTION app_ta_id() RETURNS integer LANGUAGE sql STABLE AS
+$$ SELECT nullif(current_setting('app.ta_id', true), '')::integer $$;
+
+CREATE ROLE sqlib_reader LOGIN PASSWORD :'reader_password' NOBYPASSRLS;
+CREATE ROLE sqlib_approver LOGIN PASSWORD :'approver_password' NOBYPASSRLS;
+CREATE ROLE sqlib_checker LOGIN PASSWORD :'checker_password' NOBYPASSRLS;
+
+GRANT CONNECT ON DATABASE records_db TO sqlib_reader, sqlib_approver, sqlib_checker;
+GRANT USAGE ON SCHEMA public TO sqlib_reader, sqlib_approver, sqlib_checker;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO sqlib_reader, sqlib_approver, sqlib_checker;
+GRANT EXECUTE ON FUNCTION app_student_id(), app_ta_id()
+    TO sqlib_reader, sqlib_approver, sqlib_checker;
+
+-- The only write in the whole system: a TA approves or rejects a plan (UC4).
+GRANT UPDATE (status, reviewed_by, reviewed_at) ON plans TO sqlib_approver;
+
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plan_courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE excuses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE improvement_plans ENABLE ROW LEVEL SECURITY;
+
+-- A student sees their own row; a TA sees their advisees.
+CREATE POLICY students_visible ON students FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (student_id = app_student_id() OR advisor_ta_id = app_ta_id());
+
+-- Everything else follows the students policy: the inner SELECT is itself filtered.
+CREATE POLICY enrollments_visible ON enrollments FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
+CREATE POLICY plans_visible ON plans FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
+CREATE POLICY plan_courses_visible ON plan_courses FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (plan_id IN (SELECT plan_id FROM plans));
+CREATE POLICY excuses_visible ON excuses FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
+CREATE POLICY improvement_plans_visible ON improvement_plans FOR SELECT
+    TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
+
+-- A TA may change only their advisees' plans, and only as themselves.
+CREATE POLICY plans_review ON plans FOR UPDATE TO sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students WHERE advisor_ta_id = app_ta_id()))
+    WITH CHECK (reviewed_by = app_ta_id());
+
+-- The nightly plan checker reads every plan and the records behind it; it writes nothing.
+CREATE POLICY students_checker ON students FOR SELECT TO sqlib_checker USING (true);
+CREATE POLICY enrollments_checker ON enrollments FOR SELECT TO sqlib_checker USING (true);
+CREATE POLICY plans_checker ON plans FOR SELECT TO sqlib_checker USING (true);
+CREATE POLICY plan_courses_checker ON plan_courses FOR SELECT TO sqlib_checker USING (true);

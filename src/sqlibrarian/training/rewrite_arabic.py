@@ -9,23 +9,26 @@ Same free-tier limits as generate_pairs.py: stop with --max-calls, run again
 tomorrow, and it skips pairs already rewritten.
 
 Run:
-    uv run python -m sqlibrarian.training.rewrite_arabic --max-calls 38
+    uv run python -m sqlibrarian.training.rewrite_arabic
 """
 
 import argparse
 import json
-import os
 import random
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-from openai import OpenAI
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.enums import Lang
+from sqlibrarian.helpers.log import configure_logging, get_logger
+from sqlibrarian.training.groq_client import CALL_ERRORS, make_client
+
+log = get_logger(__name__)
 
 STYLES = {
-    "eg": "Egyptian Arabic, written the way students text each other (عامية). "
+    Lang.EG: "Egyptian Arabic, written the way students text each other (عامية). "
     "Keep course names as they are.",
-    "mixed": "a mix of Egyptian Arabic and English, the way CS students really write: "
+    Lang.MIXED: "a mix of Egyptian Arabic and English, the way CS students really write: "
     "Arabic sentence, English course names and technical words (GPA, credit hours).",
 }
 
@@ -38,82 +41,82 @@ Questions:
 
 Return JSON only: {{"items": [{{"id": "...", "question": "..."}}]}}"""
 
+SAMPLE_SEED = 42  # the same third is chosen every run, so a second day continues the plan
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+
 
 def main() -> None:
-    load_dotenv()
+    configure_logging()
+    s = get_settings()
     p = argparse.ArgumentParser()
-    p.add_argument("--pairs", type=Path, default=Path("data/training/own_pairs.jsonl"))
-    p.add_argument("--out", type=Path, default=Path("data/training/own_pairs_arabic.jsonl"))
+    p.add_argument("--pairs", type=Path, default=s.paths.own_pairs)
+    p.add_argument("--out", type=Path, default=s.paths.own_pairs_arabic)
     p.add_argument("--share", type=float, default=0.33)
     p.add_argument("--batch", type=int, default=20)
-    p.add_argument("--max-calls", type=int, default=38)
-    p.add_argument("--wait", type=float, default=45.0)
-    p.add_argument("--model", default="openai/gpt-oss-120b")
+    p.add_argument("--max-calls", type=int, default=s.groq_max_calls_per_day)
+    p.add_argument("--wait", type=float, default=s.groq_wait_seconds)
+    p.add_argument("--model", default=s.pair_generator_model)
     args = p.parse_args()
 
-    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ["GROQ_API_KEY"])
-    pairs = [
-        json.loads(x) for x in args.pairs.read_text(encoding="utf-8").splitlines() if x.strip()
-    ]
+    client = make_client()
+    pairs = read_jsonl(args.pairs)
+    chosen = random.Random(SAMPLE_SEED).sample(pairs, int(len(pairs) * args.share))
+    done = {r["source_id"] for r in read_jsonl(args.out)} if args.out.exists() else set()
+    todo = [pair for pair in chosen if pair["id"] not in done]
+    log.info("rewrite.start", chosen=len(chosen), already_done=len(done), to_do=len(todo))
 
-    # Same random third every run (fixed seed), so a second day continues the same plan.
-    random.seed(42)
-    chosen = random.sample(pairs, int(len(pairs) * args.share))
-    done = set()
-    if args.out.exists():
-        done = {
-            json.loads(x)["source_id"]
-            for x in args.out.read_text(encoding="utf-8").splitlines()
-            if x.strip()
-        }
-    todo = [p_ for p_ in chosen if p_["id"] not in done]
-    print(f"{len(chosen)} chosen, {len(done)} already rewritten, {len(todo)} to go")
-
-    by_id = {p_["id"]: p_ for p_ in pairs}
+    by_id = {pair["id"]: pair for pair in pairs}
     for call in range(args.max_calls):
         batch = todo[call * args.batch : (call + 1) * args.batch]
         if not batch:
             break
-        style = "eg" if call % 2 == 0 else "mixed"  # half Egyptian, half mixed
+        style = Lang.EG if call % 2 == 0 else Lang.MIXED  # half Egyptian, half mixed
         items = "\n".join(
             json.dumps({"id": b["id"], "question": b["question"]}, ensure_ascii=False)
             for b in batch
         )
+        prompt = PROMPT.format(style=STYLES[style], items=items)
         try:
             resp = client.chat.completions.create(
                 model=args.model,
-                messages=[
-                    {"role": "user", "content": PROMPT.format(style=STYLES[style], items=items)}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
                 response_format={"type": "json_object"},
                 extra_body={"reasoning_effort": "low"},
             )
             rewrites = json.loads(resp.choices[0].message.content)["items"]
-        except Exception as e:
-            print(f"call {call}: failed ({type(e).__name__}); continuing")
+            if not isinstance(rewrites, list):
+                raise TypeError("items is not a list")
+        except CALL_ERRORS as e:
+            log.warning("rewrite.call_failed", call=call + 1, error=type(e).__name__)
             time.sleep(args.wait * 2)
             continue
 
+        written = skipped = 0
         with args.out.open("a", encoding="utf-8") as f:
             for r in rewrites:
+                if not isinstance(r, dict) or not isinstance(r.get("question"), str):
+                    skipped += 1  # the model sent a bare string or a broken item
+                    continue
                 src = by_id.get(r.get("id"))
-                if src is None or not r.get("question"):
-                    continue  # the model invented or dropped an id: skip it
-                f.write(
-                    json.dumps(
-                        {
-                            **src,
-                            "id": f"{src['id']}-{style}",
-                            "source_id": src["id"],
-                            "question": r["question"].strip(),
-                            "lang": style,
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        print(f"call {call + 1}: {len(rewrites)} rewritten ({style})")
+                if src is None or not r["question"].strip():
+                    skipped += 1  # the model invented or dropped an id
+                    continue
+                row = {
+                    **src,
+                    "id": f"{src['id']}-{style}",
+                    "source_id": src["id"],
+                    "question": r["question"].strip(),
+                    "lang": style,
+                }
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                written += 1
+        log.info(
+            "rewrite.call_done", call=call + 1, style=style, rewritten=written, skipped=skipped
+        )
         time.sleep(args.wait)
 
 

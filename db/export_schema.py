@@ -2,20 +2,20 @@
 
 It is built from the live database, so it always matches what queries run against:
 table and column names, types, keys, and the COMMENT on every table and column
-(written in db/records/01_schema.sql). The same text goes into training, evaluation
-and the API prompt, so change the comments in the .sql file, not this output.
+(written in db/records/01_schema.sql; "-" = no text needed). The same text goes into
+training, evaluation and the API prompt, so change the comments in the .sql file, not
+this output.
 
 Run (records_db up):
     uv run python db/export_schema.py
 """
 
-from pathlib import Path
-
 import psycopg
 
-from sqlibrarian.config import get_settings
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
 
-OUT = Path(__file__).resolve().parents[1] / "data/eval/schema.txt"
+log = get_logger(__name__)
 
 HEADER = (
     "PostgreSQL database of one university student's records.\n"
@@ -85,17 +85,22 @@ def build_schema_text(conn: psycopg.Connection) -> str:
                     tags.append("PK")
                 if name in fkeys:
                     tags.append(f"-> {fkeys[name]}")
-                lines.append(f"  {name} {' '.join(tags)}: {comment}")
+                # A comment of "-" marks a self-explanatory column (row ids, the student):
+                # it is listed without text, which keeps the prompt short.
+                text = "" if comment.strip() == "-" else f": {comment}"
+                lines.append(f"  {name} {' '.join(tags)}{text}")
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def main() -> None:
-    with psycopg.connect(get_settings().records_db_url) as conn:
+    configure_logging()
+    out = get_settings().paths.schema
+    with psycopg.connect(get_settings().records_dsn) as conn:
         text = build_schema_text(conn)
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text, encoding="utf-8")
-    print(f"wrote {OUT} ({len(text.splitlines())} lines, {len(text)} characters)")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    log.info("schema.exported", path=str(out), lines=len(text.splitlines()), characters=len(text))
 
 
 if __name__ == "__main__":

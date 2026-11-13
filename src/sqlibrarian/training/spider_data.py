@@ -16,7 +16,11 @@ from pathlib import Path
 
 from datasets import Dataset, DatasetDict, load_dataset
 
-from sqlibrarian.prompt import build_messages
+from sqlibrarian.helpers.config import get_settings
+from sqlibrarian.helpers.log import configure_logging, get_logger
+from sqlibrarian.helpers.prompt import build_messages
+
+log = get_logger(__name__)
 
 
 def schema_to_text(db: dict) -> str:
@@ -65,20 +69,21 @@ def to_examples(rows, schemas: dict[str, str], source: str) -> list[dict]:
                 "source": source,
             }
         )
-    print(f"{source}: {len(examples)} examples, {missing} skipped (unknown db_id)")
+    log.info("spider.examples", source=source, examples=len(examples), skipped_unknown_db=missing)
     return examples
 
 
 def read_json_rows(path: Path) -> list[dict]:
     rows = json.loads(path.read_text(encoding="utf-8"))
-    print(f"{path.name}: {len(rows)} rows, keys = {sorted(rows[0].keys())}")
+    log.info("spider.file_read", file=path.name, rows=len(rows), keys=sorted(rows[0].keys()))
     return rows
 
 
 def main() -> None:
+    configure_logging()
     p = argparse.ArgumentParser()
     p.add_argument("--arspider-dir", type=Path, required=True)
-    p.add_argument("--out", type=Path, default=Path("data/training/public"))
+    p.add_argument("--out", type=Path, default=get_settings().paths.public)
     args = p.parse_args()
 
     # Ar-Spider's zip may unpack into a sub-folder: find the files wherever they are.
@@ -89,8 +94,7 @@ def main() -> None:
         return hits[0]
 
     schemas = load_schemas(find("tables.json"))
-    print(f"schemas for {len(schemas)} databases")
-    print("example schema:\n", next(iter(schemas.values()))[:400], "\n")
+    log.info("spider.schemas", databases=len(schemas), example=next(iter(schemas.values()))[:400])
 
     spider = load_dataset("xlangai/spider")  # splits: train, validation
     ar_train = read_json_rows(find("Ar_train_spider.json"))
@@ -103,8 +107,8 @@ def main() -> None:
 
     ds = DatasetDict({"train": Dataset.from_list(train), "ar_dev": Dataset.from_list(dev)})
     ds.save_to_disk(str(args.out))
-    print(f"saved to {args.out}")
-    print(ds["train"][0]["messages"][1]["content"][:300])
+    log.info("spider.saved", out=str(args.out), **{k: len(v) for k, v in ds.items()})
+    log.info("spider.first_prompt", text=ds["train"][0]["messages"][1]["content"][:300])
 
 
 if __name__ == "__main__":

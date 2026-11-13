@@ -1,0 +1,104 @@
+PostgreSQL database of one university student's records.
+Rows are already limited to the student asking: never filter by student_ref.
+The current term is the row of academic_terms where current_flag is true.
+
+TABLE academic_terms: Academic terms. Each year has a fall and a spring term, sometimes a summer term.
+  term_ref INT PK: Term number; a higher number is a later term.
+  year INT: Calendar year the term starts in (spring 2027 has year 2027).
+  semester_type TEXT: 'fall', 'spring' or 'summer'.
+  current_flag BOOL: True only for the term running now ("this term").
+  registration_opens DATE: First day of course registration for this term; empty if not announced.
+  registration_closes DATE: Last day of registration; it is open when CURRENT_DATE is between the two dates.
+
+TABLE course_catalog: Every course in the Computer Science (CS) and Information Systems (IS) study plans.
+  course_ref TEXT PK: e.g. 'CS 201'. CS = computer science, IS = information systems, BS = basic sciences, H = humanities.
+  course_name_en TEXT: English name, e.g. 'Data Structures'.
+  course_name_ar TEXT: Arabic name, e.g. 'هياكل البيانات'.
+  credit_hours INT: 3 for most courses, 2 for humanities (H).
+  academic_level INT: Study-plan year it is placed in, 1 to 4 (not always the first digit of the code).
+  plan_semester TEXT: Study-plan term it is placed in: 'fall' or 'spring'.
+  department TEXT: Study plan it belongs to: 'CS', 'IS' or 'both'.
+  mandatory BOOL: True if required in its program; false for an elective.
+  min_completed_hours INT: Passed hours needed before taking it: 0, or 96 for graduation project 1.
+
+TABLE course_prerequisites: Courses that must be passed before another course can be taken.
+  course_ref TEXT PK -> course_catalog.course_ref: The course that has the prerequisite.
+  prereq_course_ref TEXT PK -> course_catalog.course_ref: The course that must be passed first.
+
+TABLE term_offerings: Courses open for registration in a term; no row means not offered. The next term has no rows until announced.
+  term_ref INT PK -> academic_terms.term_ref
+  course_ref TEXT PK -> course_catalog.course_ref
+  graduates_only BOOL: Only graduation candidates may register it.
+
+TABLE academic_rules: Fixed academic rules, one row each.
+  rule_name TEXT PK: Rule name: 'min_credit_hours', 'warning_gpa', 'at_risk_consecutive_warnings', 'at_risk_cumulative_warnings', 'dismissal_consecutive_warnings', 'dismissal_cumulative_warnings', 'graduation_hours' or 'max_elective_courses'.
+  rule_value NUMERIC: The rule's number, e.g. 9 for min_credit_hours.
+  description TEXT
+
+TABLE credit_hour_limits: Most credit hours a student may register in a term, by cumulative GPA. A new student may register 21.
+  term_type TEXT PK: 'regular' (fall, spring) or 'summer'.
+  gpa_from NUMERIC PK: Band start (included).
+  gpa_to NUMERIC: Band end (not included); the top band ends at 4.01.
+  max_hours_allowed INT: Hours allowed in this band.
+
+TABLE grade_scale: Total mark out of 100 to letter grade and points. F (below 50) fails; other letters pass.
+  grade_letter TEXT PK: 'A+' (best) to 'F'.
+  min_total NUMERIC: Lowest total for this letter.
+  points NUMERIC: Grade points, 4.0 (A+) to 0 (F).
+
+TABLE advisors: Teaching assistants; they are the academic advisors.
+  advisor_no INT PK
+  advisor_name TEXT: Full name.
+
+TABLE student_profiles: Students (only the one asking, or a TA's advisees).
+  student_ref INT PK
+  name_ar TEXT: Full name in Arabic.
+  name_en TEXT: Full name in English letters.
+  department TEXT: 'CS' or 'IS'.
+  academic_level INT: Year of study, 1 to 4.
+  cgpa NUMERIC: Cumulative GPA, 0.00 to 4.00; empty for a new student.
+  completed_hours INT: Credit hours passed so far.
+  standing_code TEXT: 'good_standing', 'at_risk' (near dismissal), 'on_probation' (on an improvement plan), 'improvement_plan_previous' or 'dismissed'.
+  consecutive_warning_count INT: Academic warnings in a row (a fall/spring term ending with GPA below warning_gpa gives one; a term above resets it).
+  cumulative_warning_count INT: All academic warnings so far.
+  graduation_candidate BOOL: Can reach the 135 graduation hours by the end of next term.
+  advisor_ref INT -> advisors.advisor_no: The advisor.
+
+TABLE course_attempts: One row per course attempt in a term, with marks; a retaken course has one row per attempt.
+  enrollment_id INT PK
+  student_ref INT -> student_profiles.student_ref
+  course_ref TEXT -> course_catalog.course_ref
+  term_ref INT -> academic_terms.term_ref
+  midterm NUMERIC: Out of 20; empty until recorded.
+  coursework NUMERIC: Assignments, labs, quizzes, out of 20; empty until recorded.
+  final NUMERIC: Final exam, out of 60; empty until recorded.
+  total_mark NUMERIC: Out of 100 (capped for retakes); empty until graded.
+  grade_letter TEXT -> grade_scale.grade_letter: A+ to F; empty until graded.
+  quality_points NUMERIC: 0 to 4. Term GPA = SUM(quality_points * credit_hours) / SUM(credit_hours) over graded courses.
+  attempt_status TEXT: 'passed', 'failed', 'in_progress' (this term), 'withdrawn' or 'incomplete'. Only passed and failed count in the GPA.
+
+TABLE student_excuses: Approved excuses: time off that does not count against the student.
+  excuse_id INT PK
+  student_ref INT -> student_profiles.student_ref
+  academic_year TEXT: e.g. '2024/2025' (fall 2024 and spring 2025).
+  excuse_kind TEXT: 'term_excuse' (the spring term), 'year_excuse' or 'suspension' (enrollment suspended for the year).
+
+TABLE improvement_records: Improvement plans for students at risk of dismissal.
+  improvement_plan_id INT PK
+  student_ref INT -> student_profiles.student_ref
+  start_term_id INT -> academic_terms.term_ref: Term it started.
+  evaluation_term_id INT -> academic_terms.term_ref: Term at whose end it is judged.
+  plan_outcome TEXT: 'in_progress', 'success' or 'failed'.
+
+TABLE advising_requests: Next-term course plan sent to the advisor for approval.
+  request_ref INT PK
+  student_ref INT -> student_profiles.student_ref
+  term_ref INT -> academic_terms.term_ref: Term the plan is for (usually next term).
+  created_at TIMESTAMP: When it was sent.
+  attempt_status TEXT: 'pending', 'approved' or 'rejected'.
+  reviewed_by_advisor INT -> advisors.advisor_no: TA who reviewed it; empty while pending.
+  reviewed_at TIMESTAMP: When reviewed; empty while pending.
+
+TABLE advising_request_courses: Courses in each plan.
+  request_ref INT PK -> advising_requests.request_ref
+  course_ref TEXT PK -> course_catalog.course_ref

@@ -1,0 +1,17 @@
+# First GRPO run, on top of the merged SFT model. Edit start_model to your Hub user:
+# <your-hf-user>/sqlibrarian-sft-run1 (sft.py prints it at the end: sft.pushed).
+# 4 completions per prompt, batch 4 x 2 = 8 (divisible by 4). About 3-5 hours on a T4.
+run_name: grpo-run1
+start_model: CHANGE-ME/sqlibrarian-sft-run1
+prompts_max: 1500
+num_generations: 4
+max_completion_length: 256
+temperature: 0.9
+beta: 0.0
+learning_rate: 5.0e-6
+num_train_epochs: 1
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 2
+reward_students: 3
+seed: 42
+push_to_hub: true
