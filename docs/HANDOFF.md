@@ -57,7 +57,7 @@ After changing the schema comments or the dev questions, regenerate the derived 
 `uv run python db/export_schema.py` then
 `uv run python -m sqlibrarian.training.schema_variants export-heldout` (a test checks they match).
 
-Kaggle: use `BRANCH = "schema-v2"` in cell A (until the branch is merged). To see how much a
+Kaggle: the notebooks clone `master` (schema-v2 is merged; the SFT notebook is set to run 6). To see how much a
 trained model depends on our names, run `notebooks/sqlibrarian-eval.ipynb` (10 minutes, no
 training) and score both files:
 ```bash
