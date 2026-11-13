@@ -89,6 +89,15 @@ def test_ask_needs_a_token(api):
     assert client.post("/ask", json={"question": "my gpa"}).status_code == 401
 
 
+def own_gpa() -> float:
+    """The logged-in student's GPA, read as the table owner (the seed decides the value)."""
+    with psycopg.connect(get_settings().records_dsn) as conn:
+        row = conn.execute(
+            "SELECT cumulative_gpa FROM students WHERE student_id = %s", (int(STUDENT),)
+        ).fetchone()
+    return float(row[0])
+
+
 def test_answer_for_the_logged_in_student(api):
     client, fake = api
     out = ask(
@@ -99,7 +108,8 @@ def test_answer_for_the_logged_in_student(api):
         "SELECT cumulative_gpa FROM students",
     )
     assert out["outcome"] == "answered"
-    assert out["rows"] == [[0.99]] and out["answer"] == "The answer is 0.99."
+    gpa = own_gpa()
+    assert out["rows"] == [[gpa]] and out["answer"] == f"The answer is {gpa}."
     assert out["sql"].endswith("LIMIT 200")
     # the model saw the schema and the question, never an id
     assert STUDENT not in json.dumps(fake.calls[-1])
@@ -114,7 +124,7 @@ def test_arabic_question_gets_an_arabic_answer(api):
         "ما هو معدلي التراكمي؟",
         "SELECT cumulative_gpa FROM students",
     )
-    assert out["answer"] == "الإجابة: 0.99"
+    assert out["answer"] == f"الإجابة: {own_gpa()}"
 
 
 def test_row_security_hides_other_students_even_if_asked_for(api):
@@ -133,6 +143,24 @@ def test_a_ta_sees_only_their_advisees(api):
     client, fake = api
     out = ask(client, fake, login(client, TA), "how many advisees", "SELECT count(*) FROM students")
     assert out["rows"] == [[50]]
+
+
+@pytest.mark.parametrize("table", ["excuses", "improvement_plans"])
+def test_new_personal_tables_follow_row_security(api, table):
+    """A student sees only their own excuses and improvement plans; a TA only their
+    advisees' (the counts match what the table owner sees for those students)."""
+    client, fake = api
+    own = ask(client, fake, login(client, STUDENT), "mine", f"SELECT student_id FROM {table}")
+    assert {r[0] for r in own["rows"]} <= {int(STUDENT)}
+    ta = ask(client, fake, login(client, TA), "advisees", f"SELECT count(*) FROM {table}")
+    with psycopg.connect(get_settings().records_dsn) as conn:
+        expected = conn.execute(
+            f"SELECT count(*) FROM {table} JOIN students USING (student_id)"
+            " WHERE advisor_ta_id = %s",
+            (int(TA.removeprefix("ta")),),
+        ).fetchone()[0]
+    assert expected > 0, "the seed should give this TA's advisees some rows"
+    assert ta["rows"] == [[expected]]
 
 
 def test_writes_are_refused_by_the_guard(api):

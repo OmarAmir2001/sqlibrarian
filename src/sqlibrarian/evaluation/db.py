@@ -1,9 +1,10 @@
 """Database helpers shared by the evaluation scripts.
 
 Until row-level security exists (P2), "what one student sees" is imitated with
-temporary views: in the current session, `students`, `enrollments`, `plans` and
-`plan_courses` are replaced by views that keep only the rows of the student named in
-the setting `eval.student_id` (PostgreSQL looks in the temporary schema first).
+temporary views: in the current session, `students`, `enrollments`, `plans`,
+`plan_courses`, `excuses` and `improvement_plans` are replaced by views that keep only
+the rows of the student named in the setting `eval.student_id` (PostgreSQL looks in the
+temporary schema first).
 The views are created once; switching student only changes the setting, the same
 way the API will set `app.student_id` for row-level security. Callers roll back
 afterwards, so nothing is saved.
@@ -16,6 +17,9 @@ _VIEWS = [
     f"CREATE TEMP VIEW students AS SELECT * FROM public.students WHERE student_id = {_SID}",
     f"CREATE TEMP VIEW enrollments AS SELECT * FROM public.enrollments WHERE student_id = {_SID}",
     f"CREATE TEMP VIEW plans AS SELECT * FROM public.plans WHERE student_id = {_SID}",
+    f"CREATE TEMP VIEW excuses AS SELECT * FROM public.excuses WHERE student_id = {_SID}",
+    "CREATE TEMP VIEW improvement_plans AS SELECT * FROM public.improvement_plans"
+    f" WHERE student_id = {_SID}",
     "CREATE TEMP VIEW plan_courses AS SELECT pc.* FROM public.plan_courses pc"
     f" JOIN public.plans p ON p.plan_id = pc.plan_id WHERE p.student_id = {_SID}",
 ]

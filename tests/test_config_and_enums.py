@@ -8,10 +8,15 @@ import pytest
 
 from sqlibrarian.helpers.config import Settings
 from sqlibrarian.helpers.enums import (
+    AcademicStanding,
     AskOutcome,
     EnrollmentStatus,
+    ExcuseType,
+    ImprovementOutcome,
     PlanRule,
+    PlanSemester,
     PlanStatus,
+    PolicyRule,
     Program,
     Role,
     Season,
@@ -36,6 +41,10 @@ def check_values(sql: str, column: str) -> set[str]:
         (Season, RECORDS_SQL, "season"),
         (TermType, RECORDS_SQL, "term_type"),
         (EnrollmentStatus, RECORDS_SQL, "status"),
+        (PlanSemester, RECORDS_SQL, "semester"),
+        (AcademicStanding, RECORDS_SQL, "academic_standing"),
+        (ExcuseType, RECORDS_SQL, "excuse_type"),
+        (ImprovementOutcome, RECORDS_SQL, "outcome"),
         (PlanRule, APP_SQL, "rule"),
         (Role, APP_SQL, "role"),
         (AskOutcome, APP_SQL, "outcome"),
@@ -53,6 +62,12 @@ def test_plan_status_matches_schema():
 def test_program_values_match_schema():
     courses = RECORDS_SQL[RECORDS_SQL.index("CREATE TABLE courses") :]
     assert {m.value for m in Program} == check_values(courses, "program")
+
+
+def test_policy_rules_match_catalog():
+    catalog = (ROOT / "db/records/02_catalog.sql").read_text("utf-8")
+    rows = catalog[catalog.index("INSERT INTO registration_policy") :]
+    assert {m.value for m in PolicyRule} == set(re.findall(r"^    \('(\w+)',", rows, re.M))
 
 
 def test_graded_statuses():

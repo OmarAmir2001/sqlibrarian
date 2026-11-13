@@ -23,8 +23,9 @@ from sqlglot import exp
 from sqlibrarian.helpers.config import get_settings
 
 ALLOWED_TABLES = frozenset({
-    "terms", "courses", "prerequisites", "credit_rules", "grading_scale",
-    "tas", "students", "enrollments", "plans", "plan_courses",
+    "terms", "courses", "prerequisites", "course_offerings", "registration_policy",
+    "credit_rules", "grading_scale", "tas", "students", "enrollments", "excuses",
+    "improvement_plans", "plans", "plan_courses",
 })  # fmt: skip
 
 # Functions a question about student records can need. Anything else is refused.

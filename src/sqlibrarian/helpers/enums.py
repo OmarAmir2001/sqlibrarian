@@ -48,6 +48,52 @@ class Season(StrEnum):
     SUMMER = "summer"
 
 
+class PlanSemester(StrEnum):
+    """courses.semester: where a course sits in its study-plan year."""
+
+    FALL = "fall"
+    SPRING = "spring"
+
+
+class AcademicStanding(StrEnum):
+    """students.academic_standing (the institute's codes)."""
+
+    GOOD_STANDING = "good_standing"
+    AT_RISK = "at_risk"  # low GPA or close to the dismissal warning limits
+    ON_PROBATION = "on_probation"  # on an improvement plan now
+    IMPROVEMENT_PLAN_PREVIOUS = "improvement_plan_previous"
+    DISMISSED = "dismissed"
+
+
+class ExcuseType(StrEnum):
+    """excuses.excuse_type"""
+
+    TERM_EXCUSE = "term_excuse"  # the spring term of an academic year
+    YEAR_EXCUSE = "year_excuse"
+    SUSPENSION = "suspension"  # enrollment suspended for the year
+
+
+class ImprovementOutcome(StrEnum):
+    """improvement_plans.outcome"""
+
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class PolicyRule(StrEnum):
+    """registration_policy.rule_key"""
+
+    MIN_CREDIT_HOURS = "min_credit_hours"
+    WARNING_GPA = "warning_gpa"
+    AT_RISK_CONSECUTIVE_WARNINGS = "at_risk_consecutive_warnings"
+    AT_RISK_CUMULATIVE_WARNINGS = "at_risk_cumulative_warnings"
+    DISMISSAL_CONSECUTIVE_WARNINGS = "dismissal_consecutive_warnings"
+    DISMISSAL_CUMULATIVE_WARNINGS = "dismissal_cumulative_warnings"
+    GRADUATION_HOURS = "graduation_hours"
+    MAX_ELECTIVE_COURSES = "max_elective_courses"
+
+
 class TermType(StrEnum):
     """credit_rules.term_type: fall and spring are regular terms."""
 

@@ -34,6 +34,8 @@ ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE excuses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE improvement_plans ENABLE ROW LEVEL SECURITY;
 
 -- A student sees their own row; a TA sees their advisees.
 CREATE POLICY students_visible ON students FOR SELECT TO sqlib_reader, sqlib_approver
@@ -46,6 +48,11 @@ CREATE POLICY plans_visible ON plans FOR SELECT TO sqlib_reader, sqlib_approver
     USING (student_id IN (SELECT student_id FROM students));
 CREATE POLICY plan_courses_visible ON plan_courses FOR SELECT TO sqlib_reader, sqlib_approver
     USING (plan_id IN (SELECT plan_id FROM plans));
+CREATE POLICY excuses_visible ON excuses FOR SELECT TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
+CREATE POLICY improvement_plans_visible ON improvement_plans FOR SELECT
+    TO sqlib_reader, sqlib_approver
+    USING (student_id IN (SELECT student_id FROM students));
 
 -- A TA may change only their advisees' plans, and only as themselves.
 CREATE POLICY plans_review ON plans FOR UPDATE TO sqlib_approver

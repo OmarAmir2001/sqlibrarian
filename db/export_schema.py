@@ -2,8 +2,9 @@
 
 It is built from the live database, so it always matches what queries run against:
 table and column names, types, keys, and the COMMENT on every table and column
-(written in db/records/01_schema.sql). The same text goes into training, evaluation
-and the API prompt, so change the comments in the .sql file, not this output.
+(written in db/records/01_schema.sql; "-" = no text needed). The same text goes into
+training, evaluation and the API prompt, so change the comments in the .sql file, not
+this output.
 
 Run (records_db up):
     uv run python db/export_schema.py
@@ -84,7 +85,10 @@ def build_schema_text(conn: psycopg.Connection) -> str:
                     tags.append("PK")
                 if name in fkeys:
                     tags.append(f"-> {fkeys[name]}")
-                lines.append(f"  {name} {' '.join(tags)}: {comment}")
+                # A comment of "-" marks a self-explanatory column (row ids, the student):
+                # it is listed without text, which keeps the prompt short.
+                text = "" if comment.strip() == "-" else f": {comment}"
+                lines.append(f"  {name} {' '.join(tags)}{text}")
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

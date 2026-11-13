@@ -1,11 +1,13 @@
 """Checks on the hand-made evaluation files that need no database."""
 
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
 import pytest
 
+from sqlibrarian.api.guard import ALLOWED_TABLES
 from sqlibrarian.training.sql_utils import filters_by_student, is_single_select
 
 EVAL = Path(__file__).resolve().parents[1] / "data/eval"
@@ -34,8 +36,7 @@ def test_dev_reference_is_safe_select_for_current_student(q):
     assert not filters_by_student(q["reference_sql"])
 
 
-def test_schema_text_exported():
+def test_schema_text_lists_exactly_the_allowed_tables():
+    """The model is shown every table the guard lets through, and nothing else."""
     text = (EVAL / "schema.txt").read_text("utf-8")
-    for table in ["terms", "courses", "prerequisites", "credit_rules", "grading_scale",
-                  "tas", "students", "enrollments", "plans", "plan_courses"]:  # fmt: skip
-        assert f"TABLE {table}:" in text
+    assert set(re.findall(r"^TABLE (\w+):", text, re.M)) == ALLOWED_TABLES
