@@ -1,6 +1,6 @@
 # Handoff: where SQLibrarian stands and what to do next
 
-Written 2026-11-06, at the end of a long build session. Everything here is free to run
+Written 2026-11-06, at the end of a long build session; updated 2026-11-13 (schema v2). Everything here is free to run
 (Kaggle GPU quota, Hugging Face, DagsHub, Groq free tier). The private tracker is
 `notes/evolution.md`; this file is the public, step-by-step version.
 
@@ -32,6 +32,39 @@ means something broke; open the run to see which step.
 After merging, change `BRANCH = ...` in the notebooks' settings cell to `"master"`.
 
 ## 3. Your next steps, in order
+
+### 3.00 Schema v2 and database-agnostic training (2026-11-13, branch `schema-v2`)
+
+What changed (details in the commit messages):
+- `records_db` gained what the institute's real system has: academic standing, warnings,
+  excuses, improvement plans, course offerings, registration rules and dates; the catalog
+  now follows the live system (study-plan level and semester, 7 prerequisites, 96 hours).
+  Only the catalog and aggregate counts came from the institute's snapshot; no record.
+- **Every own pair is also trained under 2 renamed copies of the database**
+  (`training/schema_variants.py`), so the model reads table and column names from the
+  prompt instead of remembering ours. Every renamed query is checked on PostgreSQL first.
+- A held-out renaming (`data/eval/schema_heldout.txt`), never used in training, measures
+  that: every run is scored twice, normally and with `--variant heldout`.
+
+Once, after switching to this branch (the database layout changed; fake data only):
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml rm -sf records-db
+docker volume rm sqlibrarian_records-data
+docker compose --env-file .env -f infra/docker-compose.yml up -d
+uv run python db/seed.py && uv run python db/seed_users.py
+```
+After changing the schema comments or the dev questions, regenerate the derived files:
+`uv run python db/export_schema.py` then
+`uv run python -m sqlibrarian.training.schema_variants export-heldout` (a test checks they match).
+
+Kaggle: use `BRANCH = "schema-v2"` in cell A (until the branch is merged). To see how much a
+trained model depends on our names, run `notebooks/sqlibrarian-eval.ipynb` (10 minutes, no
+training) and score both files:
+```bash
+uv run python -m sqlibrarian.evaluation.score data/eval/predictions/<run>.jsonl
+uv run python -m sqlibrarian.evaluation.score --variant heldout data/eval/predictions/<run>-heldout.jsonl
+```
+Before GRPO on this schema: `uv run --with datasets python db/publish_dump.py publish` again.
 
 ### 3.0 The loop you repeat on your own (added 2026-11-07, after SFT run 1)
 
