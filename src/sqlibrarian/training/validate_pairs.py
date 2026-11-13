@@ -8,11 +8,17 @@ Checks, in order (each rejection is counted so you can see where pairs die):
   4. it returns rows (empty is allowed only for "not recorded yet" questions)
   5. its normalized form hasn't been seen before
 
+Each kept pair gets an id made from its normalized SQL, so the id stays the same when
+the database or the raw file changes. The Egyptian/mixed rewrites (rewrite_arabic.py)
+copy their source pair's SQL; they are re-linked to the source by that SQL, and dropped
+when the source no longer passes.
+
 Run (laptop, records_db up, RECORDS_DB_URL in .env):
     uv run python -m sqlibrarian.training.validate_pairs
 """
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -47,6 +53,28 @@ def run_readonly(conn: psycopg.Connection, sql: str, timeout: str) -> int | None
             cur.execute("ROLLBACK")
 
 
+def pair_id(sql_key: str) -> str:
+    return "own-" + hashlib.sha1(sql_key.encode("utf-8")).hexdigest()[:10]
+
+
+def sync_rewrites(path: Path, kept_ids: dict[str, str]) -> None:
+    """Keep rewrites whose source SQL still passes, re-linked to the source's id."""
+    if not path.exists():
+        return
+    rows, dropped = [], 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        source = kept_ids.get(normalize_sql(r["reference_sql"]))
+        if source is None:
+            dropped += 1
+            continue
+        rows.append({**r, "id": f"{source}-{r['lang']}", "source_id": source})
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), "utf-8")
+    log.info("validate.rewrites", kept=len(rows), dropped_source_gone=dropped, out=str(path))
+
+
 def batch_lang(batch: dict) -> Lang:
     """Lines written before the "lang" field existed only have the prompt's wording."""
     if "lang" in batch:
@@ -60,6 +88,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--raw", type=Path, default=s.paths.raw_generated)
     p.add_argument("--out", type=Path, default=s.paths.own_pairs)
+    p.add_argument("--rewrites", type=Path, default=s.paths.own_pairs_arabic)
     args = p.parse_args()
 
     kept, seen, reasons = [], set(), Counter()
@@ -97,7 +126,7 @@ def main() -> None:
                 seen.add(key)
                 kept.append(
                     {
-                        "id": f"own-{len(kept):05d}",
+                        "id": pair_id(key),
                         "question": question,
                         "reference_sql": sql,
                         "qtype": batch["qtype"],
@@ -110,6 +139,7 @@ def main() -> None:
     with args.out.open("w", encoding="utf-8") as f:
         for row in kept:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    sync_rewrites(args.rewrites, {normalize_sql(r["reference_sql"]): r["id"] for r in kept})
 
     log.info(
         "validate.done", kept=len(kept), total=len(kept) + sum(reasons.values()),

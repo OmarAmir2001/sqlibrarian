@@ -61,11 +61,13 @@ uv run python -m sqlibrarian.evaluation.test_set build      # when check shows 0
      `ORDER BY term_id DESC LIMIT 1`)
    - "can I take X next term": a prerequisite counts as met if it is passed **or in progress**
    - most hours allowed: from `credit_rules` for the GPA band; **21** for a student with no GPA yet
+   - standing, warnings, hours passed, graduation candidate: read the `students` columns
+   - rule numbers (warning GPA, dismissal limits, minimum hours): `registration_policy` rows
 
 `data/eval/schema.txt` describes every table and column; `data/eval/dev_questions.jsonl` has
 50 worked examples of these conventions.
 
-## The 12 kinds
+## The 14 kinds
 
 Examples show the *kind*; don't copy them into the test set (copies of dev questions are flagged).
 
@@ -82,6 +84,8 @@ Examples show the *kind*; don't copy them into the test set (copies of dev quest
 | `this_term` | this term's courses, marks not recorded yet | "did my coursework mark in AI come out" |
 | `compare_terms` | best / worst term, improvement | "هل تحسن معدلي هذا العام؟" |
 | `profile` | advisor, program, level, credit limit | "انا في انهي level؟" |
+| `standing` | academic standing, warnings, excuses, improvement plan | "عندي كام إنذار؟" |
+| `registration` | registration dates, courses open this term, rules, graduation | "is registration still open" |
 | `other` | anything that fits none of the above | |
 
 ## Difficulty

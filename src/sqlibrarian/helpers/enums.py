@@ -139,6 +139,8 @@ class QuestionKind(StrEnum):
     THIS_TERM = "this_term"  # current registration, marks not recorded yet
     COMPARE_TERMS = "compare_terms"  # best / worst term, improvement
     PROFILE = "profile"  # advisor, program, level, credit limit
+    STANDING = "standing"  # academic standing, warnings, excuses, improvement plans
+    REGISTRATION = "registration"  # registration window, courses open, rules, graduation
     OTHER = "other"
 
 

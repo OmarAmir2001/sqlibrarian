@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from sqlibrarian.training.sql_utils import (
@@ -89,3 +91,24 @@ def test_generator_rotation_covers_every_type_in_one_cycle():
     # LANGUAGES lists English twice on purpose (two thirds English), so 3 x 3 per type
     assert len(combos) == len(QUESTION_TYPES) * 3 * 3
     assert {c[0] for c in combos[: len(QUESTION_TYPES)]} == set(QUESTION_TYPES)
+
+
+def test_rewrites_follow_their_source_pair_by_sql(tmp_path):
+    """Pair ids come from the SQL, so a rewrite finds its source again after re-validation,
+    and is dropped when the source no longer passes."""
+    from sqlibrarian.training.validate_pairs import pair_id, sync_rewrites
+
+    kept_sql = "SELECT cumulative_gpa FROM students"
+    key = normalize_sql(kept_sql)
+    assert pair_id(key) == pair_id(normalize_sql("select  cumulative_gpa from students"))
+    path = tmp_path / "rewrites.jsonl"
+    rows = [
+        {"id": "own-00007-eg", "source_id": "own-00007", "lang": "eg",
+         "question": "معدلي كام؟", "reference_sql": kept_sql},
+        {"id": "own-00008-mixed", "source_id": "own-00008", "lang": "mixed",
+         "question": "gone", "reference_sql": "SELECT 1 FROM terms"},
+    ]  # fmt: skip
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), "utf-8")
+    sync_rewrites(path, {key: pair_id(key)})
+    out = [json.loads(x) for x in path.read_text("utf-8").splitlines()]
+    assert out == [{**rows[0], "id": f"{pair_id(key)}-eg", "source_id": pair_id(key)}]

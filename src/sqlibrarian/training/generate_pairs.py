@@ -41,6 +41,14 @@ QUESTION_TYPES = [
     "comparing terms (best term, worst term, improvement between two terms)",
     "counting things (courses passed in level 2, electives passed, attempts at one course)",
     "the student's advisor, program, level, or most credit hours allowed next term",
+    "academic standing and warnings: the student's standing, warnings in a row or in total, "
+    "how many more warnings before dismissal (registration_policy limits)",
+    "excuses and improvement plans: excuses taken (which year, which type), the improvement "
+    "plan's terms and outcome",
+    "registration: is registration open now, its dates, courses open this term "
+    "(course_offerings), graduates-only courses, the minimum hours per term",
+    "graduation: hours left to graduate, graduation candidate, max electives, "
+    "study-plan courses of a level or semester (courses.level, courses.semester)",
 ]
 
 # The language each call asks for, as written in the prompt. English twice: Egyptian
@@ -73,6 +81,14 @@ Rules:
 - Arabic questions select the Arabic names (title_ar); English questions select title_en.
 - Advisor: students.advisor_ta_id joined to tas. Credit limit: credit_rules by
   students.cumulative_gpa (21 hours when it is NULL). Plans: plans joined to plan_courses.
+- Standing, warnings, hours passed and graduation candidate are columns of students
+  (academic_standing, consecutive_warnings, cumulative_warnings, completed_credit_hours,
+  graduation_candidate): select them, never compute them.
+- Rule numbers (warning GPA, dismissal warnings, minimum hours, graduation hours, electives)
+  are rows: SELECT value FROM registration_policy WHERE rule_key = '...'.
+- Courses open this term: course_offerings joined to the current term. Registration is open
+  when CURRENT_DATE is between the term's registration_opens and registration_closes.
+- Study-plan placement of a course: courses.level (year 1-4) and courses.semester.
 - Write questions the way real students write: short, informal, sometimes with typos.
 
 Examples of good pairs:

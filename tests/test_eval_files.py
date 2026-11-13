@@ -23,10 +23,10 @@ DEV = load("dev_questions.jsonl")
 
 
 def test_dev_set_shape():
-    assert len(DEV) == 50
+    assert len(DEV) == 59  # 50 + 9 for standing, warnings, excuses, registration (schema v2)
     assert all(set(q) == FIELDS for q in DEV)
     assert len({q["id"] for q in DEV}) == len(DEV)
-    assert Counter(q["lang"] for q in DEV) == {"en": 20, "ar": 15, "mixed": 15}
+    assert Counter(q["lang"] for q in DEV) == {"en": 23, "ar": 18, "mixed": 18}
     assert {q["difficulty"] for q in DEV} <= {"easy", "medium", "hard"}
 
 
