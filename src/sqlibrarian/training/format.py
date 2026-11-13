@@ -112,6 +112,31 @@ def renamed_examples(rows: list[dict], schema: str) -> list[dict]:
     return out
 
 
+def forget_card_features(repo: str, config: str, token: str | None) -> None:
+    """Drop `config`'s entry from the dataset card's `dataset_info`.
+
+    When a config already exists, push_to_hub refreshes its row counts but keeps the old
+    column list, so loading fails ("column names don't match") once a column is added.
+    Removing the entry first makes the next push write it fresh from the real columns."""
+    from huggingface_hub import DatasetCard
+    from huggingface_hub.errors import EntryNotFoundError
+
+    try:
+        card = DatasetCard.load(repo, repo_type="dataset", token=token)
+    except EntryNotFoundError:
+        return  # no card yet: the push creates it
+    info = card.data.to_dict().get("dataset_info")
+    if not isinstance(info, list):
+        return
+    kept = [entry for entry in info if entry.get("config_name") != config]
+    if len(kept) == len(info):
+        return
+    card.data.dataset_info = kept
+    message = f"card: forget the old '{config}' columns before re-pushing"
+    card.push_to_hub(repo, repo_type="dataset", token=token, commit_message=message)
+    log.info("format.card_reset", repo=repo, config=config)
+
+
 def push_own() -> None:
     from datasets import Dataset
 
@@ -132,6 +157,7 @@ def push_own() -> None:
         f"{s.schema_aug_copies} renamed copies each), data {fingerprint}, "
         f"prompt {PROMPT_VERSION}, code {git_commit()}"
     )
+    forget_card_features(repo, OWN_CONFIG, s.hf_token)
     Dataset.from_list(examples).push_to_hub(
         repo, config_name=OWN_CONFIG, private=True, token=s.hf_token, commit_message=message
     )
