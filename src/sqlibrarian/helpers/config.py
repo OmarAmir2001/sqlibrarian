@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # --- limits -----------------------------------------------------------------------
     max_train_tokens: int = Field(2048, gt=0)  # longer training examples are dropped
     statement_timeout: str = "3s"  # every query run against records_db
+    # validate_pairs: when the whole-database answer is only NULLs, at least
+    # `validate_min_students` of `validate_check_students` single students must get a value.
+    validate_check_students: int = Field(30, ge=1)
+    validate_min_students: int = Field(2, ge=1)
     # Schema augmentation (training/schema_variants.py): each own pair is also shown under
     # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants.
     schema_variant_count: int = Field(16, gt=0)

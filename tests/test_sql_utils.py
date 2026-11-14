@@ -3,9 +3,11 @@ import json
 import pytest
 
 from sqlibrarian.training.sql_utils import (
+    arabic_output,
     filters_by_student,
     is_single_select,
     normalize_sql,
+    picks_newest_term,
 )
 
 
@@ -109,6 +111,59 @@ def test_rewrites_follow_their_source_pair_by_sql(tmp_path):
          "question": "gone", "reference_sql": "SELECT 1 FROM terms"},
     ]  # fmt: skip
     path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), "utf-8")
-    sync_rewrites(path, {key: pair_id(key)})
+    source = {"id": pair_id(key), "reference_sql": kept_sql}
+    sync_rewrites(path, {key: source})
     out = [json.loads(x) for x in path.read_text("utf-8").splitlines()]
-    assert out == [{**rows[0], "id": f"{pair_id(key)}-eg", "source_id": pair_id(key)}]
+    assert out == [{**rows[0], "id": f"{pair_id(key)}-eg", "source_id": pair_id(key),
+                    "source_sql": kept_sql}]  # fmt: skip
+
+
+def test_rewrites_get_their_language_and_keep_the_link(tmp_path):
+    """A rewrite's SQL is put in its language, and it still finds its source next time."""
+    from sqlibrarian.training.validate_pairs import sync_rewrites
+
+    english = "SELECT c.title_en FROM courses c"
+    source = {"id": "own-a", "reference_sql": english}
+    path = tmp_path / "rewrites.jsonl"
+    row = {"id": "x", "lang": "eg", "question": "q", "reference_sql": english}
+    path.write_text(json.dumps(row) + "\n", "utf-8")
+    for _ in range(2):  # the second run links by source_sql
+        sync_rewrites(path, {normalize_sql(english): source}, lambda s, _: arabic_output(s))
+        out = json.loads(path.read_text("utf-8"))
+        assert out["reference_sql"] == "SELECT c.title_ar FROM courses c"
+        assert out["source_sql"] == english and out["source_id"] == "own-a"
+
+
+def test_arabic_output_changes_shown_names_only():
+    where = " WHERE c.title_en = 'Data Structures' ORDER BY c."
+    assert arabic_output(f"SELECT c.title_en FROM courses c{where}title_en") == (
+        f"SELECT c.title_ar FROM courses c{where}title_ar"
+    )
+    assert arabic_output("SELECT name_en FROM students") == "SELECT name_ar FROM students"
+    same = [
+        "SELECT c.title_en, c.title_ar FROM courses c",  # Arabic already shown
+        "SELECT 'title_en' FROM courses WHERE title_en ILIKE '%data%'",  # literal + lookup
+        "SELECT course_code FROM courses WHERE title_en IN ('Calculus 1')",
+    ]
+    for sql in same:
+        assert arabic_output(sql) == sql
+
+
+def test_picks_newest_term_flags_last_term_counted_from_the_newest():
+    flagged = [
+        "SELECT x FROM e WHERE term_id = (SELECT term_id FROM terms ORDER BY term_id DESC LIMIT 1)",
+        "SELECT x FROM e WHERE term_id = (SELECT MAX(term_id) FROM enrollments)",
+        "SELECT x FROM e WHERE term_id = (SELECT MAX(term_id) FROM terms)",
+    ]
+    fine = [
+        "SELECT MAX(term_id) FROM terms WHERE term_id < (SELECT 7)",
+        "SELECT MAX(term_id) FROM enrollments WHERE status IN ('passed', 'failed')",
+        "SELECT t.year, t.season FROM terms t ORDER BY t.term_id DESC",  # a sorted list
+    ]
+    assert all(picks_newest_term(q) for q in flagged)
+    assert not any(picks_newest_term(q) for q in fine)
+
+
+def test_no_dev_reference_counts_from_the_newest_term():
+    rows = [json.loads(x) for x in open("data/eval/dev_questions.jsonl", encoding="utf-8")]
+    assert [r["id"] for r in rows if picks_newest_term(r["reference_sql"])] == []

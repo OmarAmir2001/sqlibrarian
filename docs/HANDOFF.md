@@ -66,6 +66,16 @@ uv run python -m sqlibrarian.evaluation.score --variant heldout data/eval/predic
 ```
 Before GRPO on this schema: `uv run --with datasets python db/publish_dump.py publish` again.
 
+### 3.01 Run 7: cleaner data (2026-11-14)
+
+Run 6 scored 37.3% (held-out 39.0%: the model reads the schema, not our names). Arabic fell
+because the data contradicted the rule "Arabic questions show title_ar", and some pairs find
+"last term" from the newest term. `validate_pairs` now fixes or drops these on every run:
+non-English pairs show Arabic names (`sql_utils.arabic_output`), pairs that count from the
+newest term are dropped (`picks_newest_term`), and so are pairs whose answer is only NULLs for
+the whole database and for all but one of 30 single students. The SFT notebook is set to
+`configs/sft_run7.yaml`.
+
 ### 3.0 The loop you repeat on your own (added 2026-11-07, after SFT run 1)
 
 SFT run 1 scored **16%** on the dev set (baseline 4%). Its main weakness is the data: the first
