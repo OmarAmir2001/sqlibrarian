@@ -11,7 +11,10 @@ Checks, in order (each rejection is counted so you can see where pairs die):
      least 2 of ~30 single students (the scorer's sample + others spread across all). This
      catches "last term" written as the newest term (no grades yet): one NULL row, which
      check 4 alone accepts
-  6. its normalized form hasn't been seen before
+  6. it isn't a repeat: the same question with the same SQL, or more than
+     `max_phrasings_per_sql` questions in one language for one SQL. Different wordings of
+     one query are kept on purpose ("what's my GPA" has many); the first keeps the plain id,
+     the others get -2, -3... and share its group, so they never sit on both sides of a split
 
 Arabic, Egyptian and mixed pairs show Arabic names: a shown title_en / name_en becomes
 title_ar / name_ar (sql_utils.arabic_output), kept only if the query still returns the
@@ -163,6 +166,8 @@ def main() -> None:
     args = p.parse_args()
 
     kept, seen, reasons, by_key, localized = [], set(), Counter(), {}, 0
+    phrasings: Counter = Counter()  # (sql, lang) -> questions kept
+    per_sql: Counter = Counter()  # sql -> questions kept, for the id suffix
     with (
         psycopg.connect(s.records_dsn, autocommit=True) as conn,
         psycopg.connect(s.records_dsn) as per_student,
@@ -175,6 +180,9 @@ def main() -> None:
         for line in args.raw.read_text(encoding="utf-8").splitlines():
             batch = json.loads(line)
             for pair in batch["pairs"]:
+                if not isinstance(pair, dict):
+                    reasons["malformed"] += 1  # the model sometimes returns "" for a pair
+                    continue
                 question = (pair.get("question") or "").strip()
                 sql = (pair.get("sql") or "").strip().rstrip(";")
                 if not question or not sql:
@@ -212,12 +220,19 @@ def main() -> None:
                 localized += new != sql
                 sql = new
                 key = normalize_sql(sql)
-                if key in seen:
+                asked = " ".join(question.lower().split())
+                if (key, asked) in seen:
                     reasons["duplicate"] += 1
                     continue
-                seen.add(key)
+                if phrasings[key, lang] >= s.max_phrasings_per_sql:
+                    reasons["enough phrasings of this SQL"] += 1
+                    continue
+                seen.add((key, asked))
+                phrasings[key, lang] += 1
+                per_sql[key] += 1
+                first = by_key.get(key)
                 row = {
-                    "id": pair_id(key),
+                    "id": pair_id(key) + (f"-{per_sql[key]}" if per_sql[key] > 1 else ""),
                     "question": question,
                     "reference_sql": sql,
                     "qtype": batch["qtype"],
@@ -225,8 +240,10 @@ def main() -> None:
                     "lang": lang,
                     "rows": n_rows,
                 }
+                if first is not None:
+                    row["source_id"] = first["id"]  # same query: same group as the first
                 kept.append(row)
-                by_key[key] = row
+                by_key.setdefault(key, row)  # rewrites follow the first phrasing
                 by_key.setdefault(raw_key, row)  # old rewrites hold the SQL before
 
         def to_lang(sql: str, lang: str) -> str:
