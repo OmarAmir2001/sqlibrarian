@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     # `validate_min_students` of `validate_check_students` single students must get a value.
     validate_check_students: int = Field(30, ge=1)
     validate_min_students: int = Field(2, ge=1)
+    # validate_pairs: most differently worded questions kept for one SQL, per language.
+    max_phrasings_per_sql: int = Field(5, ge=1)
     # Schema augmentation (training/schema_variants.py): each own pair is also shown under
     # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants.
     schema_variant_count: int = Field(16, gt=0)
