@@ -1,0 +1,23 @@
+# SFT run 9: run 8's settings, more renaming. Each own pair is also shown under 3 renamed
+# schemas (was 2), and a renamed schema changes ~80% of the column names (was ~60%), so our
+# own names are ~40% of what the model sees (was ~60%). Goal: close the held-out gap (run 8:
+# 62.7% ours vs 44.1% held-out) without losing more than 2-3 questions on our schema.
+# own = 2,393 pairs + 966 Egyptian/mixed rewrites, each + 3 renamed copies = 13,436 examples
+# (data 65f495dec772), shown once; plus 3,000 Spider/Ar-Spider (~16,000, ~5.5-6 h on one T4).
+run_name: sft-run9
+use_unsloth: false
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+public_max: 3000
+own_repeat: 1
+eval_fraction: 0.05
+learning_rate: 1.0e-4
+num_train_epochs: 1
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+warmup_ratio: 0.03
+eval_steps: 100
+seed: 42
+push_to_hub: true
