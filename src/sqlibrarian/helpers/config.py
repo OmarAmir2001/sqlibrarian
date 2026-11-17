@@ -86,10 +86,15 @@ class Settings(BaseSettings):
     # validate_pairs: most differently worded questions kept for one SQL, per language.
     max_phrasings_per_sql: int = Field(5, ge=1)
     # Schema augmentation (training/schema_variants.py): each own pair is also shown under
-    # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants.
+    # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants. A
+    # variant renames each table with chance `schema_table_share` and each column with a
+    # synonym with chance `schema_column_share`. Run 9 (2026-11-17): 3 copies at 0.8 (were
+    # 2 at 0.6), so our own names are ~40% of what training shows instead of ~60%.
     schema_variant_count: int = Field(16, gt=0)
     schema_variant_seed: int = 7
-    schema_aug_copies: int = Field(2, ge=0)
+    schema_aug_copies: int = Field(3, ge=0)
+    schema_table_share: float = Field(0.8, ge=0, le=1)
+    schema_column_share: float = Field(0.8, ge=0, le=1)
     result_row_limit: int = Field(200, gt=0)  # the guard adds LIMIT 200 to every query
     groq_max_calls_per_day: int = Field(30, gt=0)  # ~6,000 tokens each, under 200K/day
     groq_wait_seconds: float = Field(45.0, ge=0)  # between calls, under 8K tokens/minute

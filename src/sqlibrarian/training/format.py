@@ -91,7 +91,10 @@ def renamed_examples(rows: list[dict], schema: str) -> list[dict]:
     )
 
     s = get_settings()
-    variants = make_variants(s.schema_variant_count, s.schema_variant_seed, schema)
+    variants = make_variants(
+        s.schema_variant_count, s.schema_variant_seed, schema,
+        table_share=s.schema_table_share, column_share=s.schema_column_share,
+    )  # fmt: skip
     texts = {v.name: rename_schema_text(schema, v) for v in variants}
     rng = random.Random(s.schema_variant_seed)
     out, dropped = [], 0
