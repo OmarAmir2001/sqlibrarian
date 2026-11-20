@@ -64,6 +64,8 @@ class GRPORunConfig(BaseModel):
     lora: LoraSettings = LoraSettings()
 
     prompts_max: int = Field(1500, gt=0)  # own pairs used as GRPO prompts
+    # share of prompts shown with a renamed schema (the reward runs them on renamed views)
+    renamed_share: float = Field(0.5, ge=0, le=1)
     num_generations: int = Field(4, ge=2)  # completions sampled per prompt
     max_completion_length: int = Field(256, gt=0)
     temperature: float = Field(0.9, gt=0)

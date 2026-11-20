@@ -267,9 +267,16 @@ def rename_sql(sql: str, v: Variant) -> str | None:
     return sql
 
 
-def view_ddl(v: Variant, tables: dict[str, list[str]], schema: str | None) -> list[str]:
+def view_ddl(
+    v: Variant,
+    tables: dict[str, list[str]],
+    schema: str | None,
+    sources: dict[str, str] | None = None,
+) -> list[str]:
     """CREATE VIEW statements that show the real tables under the variant's names.
-    schema=None makes TEMP views (they then read the per-student views of the scorer)."""
+    schema=None makes TEMP views (they then read the per-student views of the scorer).
+    `sources` replaces a table with a query, e.g. only one student's rows
+    (evaluation/db.py STUDENT_ROWS) for the GRPO reward."""
     stmts = []
     for table, cols in tables.items():
         select = ", ".join(f"{c} AS {v.columns.get(c, c)}" for c in cols)
@@ -277,6 +284,8 @@ def view_ddl(v: Variant, tables: dict[str, list[str]], schema: str | None) -> li
         target = f"{schema}.{name}" if schema else name
         kind = "VIEW" if schema else "TEMP VIEW"
         source = f"public.{table}" if schema else table
+        if sources and table in sources:
+            source = f"({sources[table]}) AS src"
         stmts.append(f"CREATE {kind} {target} AS SELECT {select} FROM {source}")
     return stmts
 

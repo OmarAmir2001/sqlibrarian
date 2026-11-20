@@ -30,3 +30,4 @@ data/eval/predictions/
 
 # Training outputs (adapters, merged models, GGUF): pushed to the HF Hub, not git
 runs/
+*:Zone.Identifier

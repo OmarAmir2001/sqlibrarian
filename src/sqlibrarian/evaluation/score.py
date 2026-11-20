@@ -208,8 +208,7 @@ def main() -> None:
         if args.variant:
             from sqlibrarian.training.schema_variants import HELDOUT
 
-            act_as_student(cur, students[0])  # the per-student views come first
-            show_variant(cur, HELDOUT)
+            show_variant(cur, HELDOUT)  # only the held-out names are visible
         witnesses: dict[str, list[int]] = {}
         log.info("score.start", students=students, note="+1 student for questions they can't test")
         for path in args.predictions:
