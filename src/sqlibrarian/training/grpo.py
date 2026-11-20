@@ -6,7 +6,8 @@ What it does, in order:
   1. loads the merged SFT model (config start_model: a Hub repo or a local folder) and
      adds fresh LoRA adapters
   2. builds prompts from your own pairs (HF config "own"): the same build_messages()
-     prompt, plus the reference SQL the reward compares against
+     prompt, plus the reference SQL the reward compares against; `renamed_share` of them
+     show a renamed schema, so GRPO stays database-agnostic like SFT
   3. for every prompt, samples num_generations queries; training/rewards.py runs each
      one against records_db as several students and scores it (1.0 correct ... -1.0 for
      filtering by student); GRPO moves the model toward the better ones
@@ -27,7 +28,7 @@ from sqlibrarian.helpers.lineage import git_commit
 from sqlibrarian.helpers.log import configure_logging, get_logger
 from sqlibrarian.helpers.prompt import PROMPT_VERSION
 from sqlibrarian.training.format import OWN_CONFIG
-from sqlibrarian.training.rewards import ExecutionReward
+from sqlibrarian.training.rewards import ORIGINAL, ExecutionReward
 from sqlibrarian.training.run_config import GRPORunConfig, load_run_config
 from sqlibrarian.training.sft import _no_run, flat, mlflow_env, push, save_bundle
 
@@ -35,17 +36,25 @@ log = get_logger(__name__)
 
 
 def load_prompts(cfg: GRPORunConfig):
-    """Own pairs -> {"prompt": [system, user], "reference_sql": ...}."""
-    from datasets import load_dataset
+    """Own pairs -> {"prompt": [system, user], "reference_sql", "schema_variant"}.
+
+    `renamed_share` of the prompts show a renamed schema (database-agnostic training);
+    the reward runs their completions on views with that variant's names."""
+    from datasets import concatenate_datasets, load_dataset
 
     s = get_settings()
     own = load_dataset(dataset_repo(), OWN_CONFIG, split="train", token=s.hf_token)
-    if "schema_variant" in own.column_names:
-        # The reward runs queries on the real table names, so only the original schema.
-        own = own.filter(lambda ex: ex["schema_variant"] == "original")
-    own = own.shuffle(seed=cfg.seed).select(range(min(cfg.prompts_max, len(own))))
-    keep = {"prompt", "reference_sql"}
-    return own.remove_columns([c for c in own.column_names if c not in keep])
+    keep = {"prompt", "reference_sql", "schema_variant"}
+    own = own.remove_columns([c for c in own.column_names if c not in keep])
+    original = own.filter(lambda ex: ex["schema_variant"] == ORIGINAL).shuffle(seed=cfg.seed)
+    renamed = own.filter(lambda ex: ex["schema_variant"] != ORIGINAL).shuffle(seed=cfg.seed)
+    n_renamed = min(round(cfg.prompts_max * cfg.renamed_share), len(renamed))
+    n_original = min(cfg.prompts_max - n_renamed, len(original))
+    prompts = concatenate_datasets(
+        [original.select(range(n_original)), renamed.select(range(n_renamed))]
+    ).shuffle(seed=cfg.seed)
+    log.info("grpo.prompts", original=n_original, renamed=n_renamed)
+    return prompts
 
 
 def train(cfg: GRPORunConfig) -> None:
@@ -63,7 +72,8 @@ def train(cfg: GRPORunConfig) -> None:
         "data_revision": dataset_revision(data_repo),
         "prompt_version": PROMPT_VERSION,
         "start_model": cfg.start_model,
-        "reward": "execution_match_v1",
+        "reward": "execution_match_v2_variants",
+        "renamed_share": cfg.renamed_share,
     }
     prompts = load_prompts(cfg)
     cuda = torch.cuda.is_available()

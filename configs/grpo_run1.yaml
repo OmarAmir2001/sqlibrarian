@@ -1,9 +1,12 @@
-# First GRPO run, on top of the merged SFT model. Edit start_model to your Hub user:
-# <your-hf-user>/sqlibrarian-sft-run1 (sft.py prints it at the end: sft.pushed).
-# 4 completions per prompt, batch 4 x 2 = 8 (divisible by 4). About 3-5 hours on a T4.
+# First GRPO run: a short trial on top of SFT run 9 (best SFT: 62.7% ours, 55.9% held-out).
+# Half the prompts show a renamed schema; the reward runs those completions on views with
+# the variant's names (training/rewards.py), so GRPO stays database-agnostic.
+# 600 prompts x 4 completions, 8 completions per step (2 prompts) = 300 steps, ~2-3 h on a T4.
+# If the reward mean rises and the score holds, a longer run follows (prompts_max 1500+).
 run_name: grpo-run1
-start_model: CHANGE-ME/sqlibrarian-sft-run1
-prompts_max: 1500
+start_model: OmarAmir2001/sqlibrarian-sft-run9
+prompts_max: 600
+renamed_share: 0.5
 num_generations: 4
 max_completion_length: 256
 temperature: 0.9

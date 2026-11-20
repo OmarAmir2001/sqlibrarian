@@ -1,7 +1,7 @@
 """Export records_db (fake data only) and upload it to the private HF dataset, so the
 GRPO notebook can run the same database inside Kaggle.
 
-    uv run --extra training python db/publish_dump.py publish     # laptop
+    uv run --with datasets python db/publish_dump.py publish     # laptop
     python db/publish_dump.py fetch --out records_db.sql           # Kaggle
 
 Uses pg_dump inside the records-db container (no local Postgres tools needed) and
