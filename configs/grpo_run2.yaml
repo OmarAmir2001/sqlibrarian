@@ -1,0 +1,21 @@
+# GRPO run 2: more learning signal than the trial (grpo-run1: 66.1% ours / 54.2% held-out,
+# vs sft-run9 62.7 / 55.9). In the trial 57% of steps had all 4 answers rewarded the same,
+# so nothing was learned from them. Here: 8 answers per question (more often a right one
+# next to a wrong one), temperature 1.0 (answers differ more), learning rate 1e-5 (was 5e-6).
+# Same 600 prompts (half renamed), same start (sft-run9), so the two runs compare directly.
+# 8 completions per step = 1 prompt per step -> 600 steps, ~4.5-5 h on a T4.
+run_name: grpo-run2
+start_model: OmarAmir2001/sqlibrarian-sft-run9
+prompts_max: 600
+renamed_share: 0.5
+num_generations: 8
+max_completion_length: 256
+temperature: 1.0
+beta: 0.0
+learning_rate: 1.0e-5
+num_train_epochs: 1
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 2
+reward_students: 3
+seed: 42
+push_to_hub: true
