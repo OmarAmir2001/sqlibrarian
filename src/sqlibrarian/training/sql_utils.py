@@ -134,3 +134,20 @@ def picks_newest_term(sql: str) -> bool:
         if table.name == "enrollments" and takes_max and where is None:
             return True
     return False
+
+
+STORED_VALUE_TABLES = {"students", "registration_policy", "tas"}
+
+
+def reads_stored_value(sql: str) -> bool:
+    """True for a plain read of stored values: only the student's row, the policy rules or
+    the advisor, and nothing aggregated (SUM, COUNT, AVG...). "My GPA", "my warnings",
+    "hours left to graduate" (a rule minus a column) are all this; GPA from grades is not."""
+    try:
+        tree = sqlglot.parse_one(sql, read="postgres")
+    except sqlglot.errors.ParseError:
+        return False
+    tables = {t.name for t in tree.find_all(exp.Table)}
+    if not tables or not tables <= STORED_VALUE_TABLES:
+        return False
+    return next(tree.find_all(exp.AggFunc), None) is None

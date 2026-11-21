@@ -8,6 +8,7 @@ from sqlibrarian.training.sql_utils import (
     is_single_select,
     normalize_sql,
     picks_newest_term,
+    reads_stored_value,
 )
 
 
@@ -167,3 +168,20 @@ def test_picks_newest_term_flags_last_term_counted_from_the_newest():
 def test_no_dev_reference_counts_from_the_newest_term():
     rows = [json.loads(x) for x in open("data/eval/dev_questions.jsonl", encoding="utf-8")]
     assert [r["id"] for r in rows if picks_newest_term(r["reference_sql"])] == []
+
+
+def test_reads_stored_value_spots_plain_reads_only():
+    stored = [
+        "SELECT cumulative_gpa FROM students",
+        "SELECT p.value - s.completed_credit_hours FROM students s"
+        " JOIN registration_policy p ON p.rule_key = 'graduation_hours'",
+        "SELECT t.name FROM students s JOIN tas t ON t.ta_id = s.advisor_ta_id",
+    ]
+    computed = [
+        "SELECT SUM(e.grade_points * c.credit_hours) / SUM(c.credit_hours)"
+        " FROM enrollments e JOIN courses c ON c.course_code = e.course_code",
+        "SELECT COUNT(*) FROM students",
+        "SELECT c.title_en FROM courses c",
+    ]
+    assert all(reads_stored_value(q) for q in stored)
+    assert not any(reads_stored_value(q) for q in computed)

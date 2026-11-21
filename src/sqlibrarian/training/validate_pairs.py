@@ -12,7 +12,8 @@ Checks, in order (each rejection is counted so you can see where pairs die):
      catches "last term" written as the newest term (no grades yet): one NULL row, which
      check 4 alone accepts
   6. it isn't a repeat: the same question with the same SQL, or more than
-     `max_phrasings_per_sql` questions in one language for one SQL. Different wordings of
+     `max_phrasings_per_sql` questions in one language for one SQL (`max_phrasings_stored_value`
+     for a plain stored-value read like "my GPA"). Different wordings of
      one query are kept on purpose ("what's my GPA" has many); the first keeps the plain id,
      the others get -2, -3... and share its group, so they never sit on both sides of a split
 
@@ -49,6 +50,7 @@ from sqlibrarian.training.sql_utils import (
     is_single_select,
     normalize_sql,
     picks_newest_term,
+    reads_stored_value,
 )
 
 log = get_logger(__name__)
@@ -224,7 +226,9 @@ def main() -> None:
                 if (key, asked) in seen:
                     reasons["duplicate"] += 1
                     continue
-                if phrasings[key, lang] >= s.max_phrasings_per_sql:
+                cap = (s.max_phrasings_stored_value if reads_stored_value(sql)
+                       else s.max_phrasings_per_sql)  # fmt: skip
+                if phrasings[key, lang] >= cap:
                     reasons["enough phrasings of this SQL"] += 1
                     continue
                 seen.add((key, asked))

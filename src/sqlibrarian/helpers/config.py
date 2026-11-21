@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     validate_min_students: int = Field(2, ge=1)
     # validate_pairs: most differently worded questions kept for one SQL, per language.
     max_phrasings_per_sql: int = Field(5, ge=1)
+    # ...but more for a plain stored-value read (sql_utils.reads_stored_value), e.g. "my GPA"
+    # = SELECT cumulative_gpa FROM students: the model needs many wordings to stop computing it.
+    max_phrasings_stored_value: int = Field(20, ge=1)
     # Schema augmentation (training/schema_variants.py): each own pair is also shown under
     # `schema_aug_copies` renamed schemas, drawn from `schema_variant_count` variants. A
     # variant renames each table with chance `schema_table_share` and each column with a
