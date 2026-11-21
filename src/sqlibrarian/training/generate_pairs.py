@@ -84,6 +84,10 @@ Rules:
 - Standing, warnings, hours passed and graduation candidate are columns of students
   (academic_standing, consecutive_warnings, cumulative_warnings, completed_credit_hours,
   graduation_candidate): select them, never compute them.
+- Total hours left to graduate is the graduation rule minus the hours passed:
+  SELECT p.value - s.completed_credit_hours FROM students s
+  JOIN registration_policy p ON p.rule_key = 'graduation_hours'.
+  Only "elective hours left" or "required hours left" sum courses.credit_hours.
 - Rule numbers (warning GPA, dismissal warnings, minimum hours, graduation hours, electives)
   are rows: SELECT value FROM registration_policy WHERE rule_key = '...'.
 - Courses open this term: course_offerings joined to the current term. Registration is open
